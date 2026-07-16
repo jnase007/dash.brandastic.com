@@ -1,6 +1,10 @@
 import { CLIENTS, getClient } from "./clients";
 import { buildDemoClient, buildDemoPortfolio, sumMetrics } from "./demo-data";
-import { fetchGoogleCustomerInsights, googleConfigured } from "./google-ads";
+import {
+  fetchGoogleCustomerInsights,
+  googleConfigured,
+  googleLiveEnabled,
+} from "./google-ads";
 import {
   fetchMetaAccountInsights,
   fetchMetaCampaignDetail,
@@ -14,14 +18,26 @@ function forceDemo() {
 
 export async function getPortfolio(range = "30d"): Promise<PortfolioSummary> {
   const metaOk = metaConfigured();
-  const googleOk = googleConfigured();
+  const googleOk = googleLiveEnabled();
+  const googleCredsPresent = googleConfigured();
 
   if (forceDemo() || (!metaOk && !googleOk)) {
     const demo = buildDemoPortfolio(range);
+    if (googleCredsPresent && !googleOk) {
+      demo.notes = [
+        ...(demo.notes || []),
+        "Google Ads credentials present but live pull is paused (GOOGLE_ADS_LIVE not enabled / developer token blocked).",
+      ];
+    }
     return demo;
   }
 
   const notes: string[] = [];
+  if (googleCredsPresent && !googleOk) {
+    notes.push(
+      "Google Ads live pull paused until developer-token/project is fixed (set GOOGLE_ADS_LIVE=true when ready)."
+    );
+  }
 
   // Parallel client pulls — serial Meta calls made /clients feel broken/slow.
   const settled = await Promise.allSettled(
@@ -49,10 +65,11 @@ export async function getPortfolio(range = "30d"): Promise<PortfolioSummary> {
     clients,
     connection: {
       meta: metaOk ? "connected" : "missing",
-      google: googleOk ? "connected" : "missing",
+      google: googleOk ? "connected" : googleCredsPresent ? "blocked" : "missing",
     },
     generatedAt: new Date().toISOString(),
     mode: anyLive ? (metaOk && googleOk ? "live" : "partial") : "demo",
+    notes: notes.length ? notes : undefined,
   };
 }
 
@@ -63,7 +80,7 @@ export async function getClientSummary(
   const client = getClient(slug);
   if (!client) throw new Error("Client not found");
 
-  if (forceDemo() || (!metaConfigured() && !googleConfigured())) {
+  if (forceDemo() || (!metaConfigured() && !googleLiveEnabled())) {
     return buildDemoClient(client, range);
   }
 
@@ -89,7 +106,7 @@ export async function getClientSummary(
     notes.push("Meta account ID not mapped yet.");
   }
 
-  if (client.googleCustomerId && googleConfigured()) {
+  if (client.googleCustomerId && googleLiveEnabled()) {
     try {
       const res = await fetchGoogleCustomerInsights(client.googleCustomerId, range);
       google = res.metrics;
@@ -99,8 +116,12 @@ export async function getClientSummary(
       // developer-token/project mismatch — keep Meta live and surface note.
       notes.push(`Google: ${e.message || "error"}`);
     }
-  } else if (googleConfigured() && !client.googleCustomerId) {
+  } else if (googleLiveEnabled() && !client.googleCustomerId) {
     notes.push("Google Ads customer ID not mapped yet.");
+  } else if (googleConfigured() && !googleLiveEnabled()) {
+    notes.push(
+      "Google Ads live pull paused (token/project still blocked). Meta data still shown."
+    );
   } else if (!googleConfigured()) {
     notes.push("Google Ads not fully connected yet.");
   }

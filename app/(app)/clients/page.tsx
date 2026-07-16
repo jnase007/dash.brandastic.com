@@ -35,6 +35,14 @@ export default async function ClientsPage({
         </div>
       </div>
 
+      {data.notes?.length ? (
+        <div className="notice" style={{ marginBottom: 14 }}>
+          {data.notes.map((n) => (
+            <div key={n}>{n}</div>
+          ))}
+        </div>
+      ) : null}
+
       <div className="card">
         <table className="table">
           <thead>

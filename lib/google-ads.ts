@@ -17,6 +17,16 @@ export function googleConfigured() {
   );
 }
 
+/**
+ * Google credentials can be present while live Ads API is still blocked
+ * (developer-token/project mismatch). Default OFF until GOOGLE_ADS_LIVE=true.
+ */
+export function googleLiveEnabled() {
+  if (!googleConfigured()) return false;
+  const flag = (process.env.GOOGLE_ADS_LIVE || "").toLowerCase();
+  return flag === "1" || flag === "true" || flag === "yes";
+}
+
 async function getAccessToken() {
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",

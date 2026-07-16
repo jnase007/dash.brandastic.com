@@ -77,8 +77,9 @@ export type PortfolioSummary = {
   clients: ClientSummary[];
   connection: {
     meta: "connected" | "missing" | "error";
-    google: "connected" | "missing" | "error";
+    google: "connected" | "missing" | "error" | "blocked";
   };
   generatedAt: string;
   mode: "live" | "demo" | "partial";
+  notes?: string[];
 };

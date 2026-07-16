@@ -73,8 +73,8 @@ export function ClientLogo({
         const stage = 320;
         const frameInset = 10;
         const frame = stage - frameInset * 2; // blue crop window
-        // Contain full logo inside the framed square with a little padding
-        const pad = 0.9;
+        // Contain full logo inside the framed square with padding so marks aren't clipped.
+        const pad = 0.84;
         const fit =
           Math.min(frame / img.naturalWidth, frame / img.naturalHeight) * pad;
         setCrop({
@@ -129,8 +129,9 @@ export function ClientLogo({
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas unavailable");
 
-    // Transparent canvas so logos keep alpha; white only shows under CSS when needed.
-    ctx.clearRect(0, 0, out, out);
+    // White square export keeps logos readable in the monogram UI.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, out, out);
 
     // The blue frame inset is 10px on the 320 stage — export only the framed square.
     const stage = 320;
