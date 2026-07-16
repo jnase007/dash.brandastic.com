@@ -34,7 +34,7 @@ export function Sidebar() {
   return (
     <aside className="sidebar light">
       <div className="brand">
-        <img src="/brand/logo-black.png" alt="Brandastic" className="brand-logo" />
+        <img src="/brand/mark-circle.png" alt="Brandastic" className="brand-logo mark" />
         <div>
           <strong>Brandastic</strong>
           <span>Ads Dash</span>

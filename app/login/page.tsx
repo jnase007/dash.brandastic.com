@@ -39,7 +39,7 @@ export default async function LoginPage({
       <section className="login-panel">
         <div className="login-card brandastic clean">
           <img
-            src="/brand/mark.png"
+            src="/brand/mark-circle.png"
             alt="Brandastic"
             className="login-mark"
           />
