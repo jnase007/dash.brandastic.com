@@ -1850,6 +1850,115 @@ code {
   padding: 4px 8px;
 }
 
+.logo-crop-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(6px);
+}
+
+.logo-crop-card {
+  width: min(460px, 100%);
+  background: #fff;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.28);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.logo-crop-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.logo-crop-head .kicker {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+
+.logo-crop-stage {
+  width: 320px;
+  height: 320px;
+  max-width: 100%;
+  margin: 0 auto;
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  background:
+    linear-gradient(45deg, #f1f5f9 25%, transparent 25%),
+    linear-gradient(-45deg, #f1f5f9 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #f1f5f9 75%),
+    linear-gradient(-45deg, transparent 75%, #f1f5f9 75%);
+  background-size: 24px 24px;
+  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  background-color: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.logo-crop-stage:active {
+  cursor: grabbing;
+}
+
+.logo-crop-stage img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  pointer-events: none;
+}
+
+.logo-crop-frame {
+  position: absolute;
+  inset: 10px;
+  border: 2px solid rgba(6, 68, 237, 0.9);
+  border-radius: 18px;
+  box-shadow: 0 0 0 999px rgba(2, 6, 23, 0.18);
+  pointer-events: none;
+}
+
+.logo-crop-zoom {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.logo-crop-help {
+  font-size: 13px;
+}
+
+.logo-crop-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn.sm {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

@@ -4,77 +4,128 @@ import { isAuthed } from "@/lib/auth";
 import { getClient } from "@/lib/clients";
 import { getClientLogoUrl, logoPathname } from "@/lib/logos";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const MAX_BYTES = 4 * 1024 * 1024;
+
+function extFromType(type: string) {
+  if (type === "image/png") return "png";
+  if (type === "image/webp") return "webp";
+  if (type === "image/svg+xml") return "svg";
+  if (type === "image/gif") return "gif";
+  return "jpg";
+}
+
+function jsonError(error: string, status = 400) {
+  return NextResponse.json({ ok: false, error }, { status });
+}
+
+async function parseUpload(req: Request): Promise<{
+  bytes: Buffer;
+  contentType: string;
+  filename: string;
+}> {
+  const contentType = req.headers.get("content-type") || "";
+
+  // Preferred path: JSON { dataUrl } or { base64, contentType }
+  if (contentType.includes("application/json")) {
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      throw new Error("Invalid JSON body");
+    }
+
+    let dataUrl = typeof body.dataUrl === "string" ? body.dataUrl : "";
+    let mime =
+      typeof body.contentType === "string" ? body.contentType : "image/png";
+    let b64 = typeof body.base64 === "string" ? body.base64 : "";
+
+    if (dataUrl.startsWith("data:")) {
+      const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!m) throw new Error("Invalid data URL");
+      mime = m[1];
+      b64 = m[2];
+    }
+
+    if (!b64) throw new Error("Missing image data");
+    if (!mime.startsWith("image/")) throw new Error("File must be an image");
+
+    const bytes = Buffer.from(b64, "base64");
+    if (!bytes.length) throw new Error("Empty image data");
+    if (bytes.length > MAX_BYTES) throw new Error("Max logo size is 4MB");
+
+    return {
+      bytes,
+      contentType: mime,
+      filename: typeof body.filename === "string" ? body.filename : `logo.${extFromType(mime)}`,
+    };
+  }
+
+  // Fallback: multipart form-data
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
+    throw new Error("Could not read upload form data");
+  }
+
+  const file = form.get("file");
+  if (!file || !(file instanceof File)) {
+    throw new Error("Missing file");
+  }
+  if (!file.type.startsWith("image/")) {
+    throw new Error("File must be an image");
+  }
+  if (file.size > MAX_BYTES) {
+    throw new Error("Max logo size is 4MB");
+  }
+
+  const ab = await file.arrayBuffer();
+  return {
+    bytes: Buffer.from(ab),
+    contentType: file.type || "image/png",
+    filename: file.name || `logo.${extFromType(file.type || "image/png")}`,
+  };
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ slug: string }> }
 ) {
-  const { slug } = await params;
-  if (!getClient(slug)) {
-    return NextResponse.json({ ok: false, error: "Unknown client" }, { status: 404 });
+  try {
+    const { slug } = await params;
+    if (!getClient(slug)) return jsonError("Unknown client", 404);
+    const url = await getClientLogoUrl(slug);
+    return NextResponse.json({ ok: true, slug, url });
+  } catch (e: any) {
+    return jsonError(e?.message || "Logo lookup failed", 500);
   }
-  const url = await getClientLogoUrl(slug);
-  return NextResponse.json({ ok: true, slug, url });
 }
 
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ slug: string }> }
 ) {
-  if (!(await isAuthed())) {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { slug } = await params;
-  if (!getClient(slug)) {
-    return NextResponse.json({ ok: false, error: "Unknown client" }, { status: 404 });
-  }
-
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    return NextResponse.json(
-      { ok: false, error: "Logo storage not configured (BLOB_READ_WRITE_TOKEN)" },
-      { status: 503 }
-    );
-  }
-
-  let form: FormData;
   try {
-    form = await req.formData();
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: "Could not read upload form data" },
-      { status: 400 }
-    );
-  }
-  const file = form.get("file");
-  if (!file || !(file instanceof File)) {
-    return NextResponse.json({ ok: false, error: "Missing file" }, { status: 400 });
-  }
+    if (!(await isAuthed())) return jsonError("Unauthorized", 401);
 
-  if (!file.type.startsWith("image/")) {
-    return NextResponse.json({ ok: false, error: "File must be an image" }, { status: 400 });
-  }
+    const { slug } = await params;
+    if (!getClient(slug)) return jsonError("Unknown client", 404);
 
-  if (file.size > 4 * 1024 * 1024) {
-    return NextResponse.json({ ok: false, error: "Max logo size is 4MB" }, { status: 400 });
-  }
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      return jsonError("Logo storage not configured (BLOB_READ_WRITE_TOKEN)", 503);
+    }
 
-  const ext =
-    file.type === "image/png"
-      ? "png"
-      : file.type === "image/webp"
-        ? "webp"
-        : file.type === "image/svg+xml"
-          ? "svg"
-          : "jpg";
+    const upload = await parseUpload(req);
+    const ext = extFromType(upload.contentType);
+    const pathname = logoPathname(slug, ext);
 
-  const pathname = logoPathname(slug, ext);
-  try {
-    const blob = await put(pathname, file, {
+    const blob = await put(pathname, upload.bytes, {
       access: "public",
       token: process.env.BLOB_READ_WRITE_TOKEN,
       addRandomSuffix: false,
       allowOverwrite: true,
-      contentType: file.type,
+      contentType: upload.contentType,
     });
 
     return NextResponse.json({
@@ -84,12 +135,11 @@ export async function POST(
       pathname: blob.pathname,
     });
   } catch (e: any) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: e?.message || "Logo upload failed",
-      },
-      { status: 500 }
-    );
+    const msg = e?.message || "Logo upload failed";
+    const status =
+      /unauthorized/i.test(msg) ? 401 :
+      /missing|invalid|must be|max logo|empty/i.test(msg) ? 400 :
+      500;
+    return jsonError(msg, status);
   }
 }
