@@ -21,17 +21,21 @@ export async function getPortfolio(range = "30d"): Promise<PortfolioSummary> {
     return demo;
   }
 
-  const clients: ClientSummary[] = [];
   const notes: string[] = [];
 
-  for (const client of CLIENTS) {
-    try {
-      clients.push(await getClientSummary(client.slug, range));
-    } catch (e: any) {
-      notes.push(`${client.name}: ${e.message || "failed"}`);
-      clients.push(buildDemoClient(client, range));
-    }
-  }
+  // Parallel client pulls — serial Meta calls made /clients feel broken/slow.
+  const settled = await Promise.allSettled(
+    CLIENTS.map((client) => getClientSummary(client.slug, range))
+  );
+  const clients: ClientSummary[] = settled.map((result, i) => {
+    const client = CLIENTS[i];
+    if (result.status === "fulfilled") return result.value;
+    const msg =
+      result.reason?.message ||
+      (typeof result.reason === "string" ? result.reason : "failed");
+    notes.push(`${client.name}: ${msg}`);
+    return buildDemoClient(client, range);
+  });
 
   const totals = clients.reduce(
     (acc, c) => sumMetrics(acc, c.combined),

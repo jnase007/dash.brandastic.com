@@ -1808,7 +1808,11 @@ code {
   object-fit: contain;
   background: #fff;
   display: block;
-  padding: 4px;
+  padding: 6px;
+  box-sizing: border-box;
+}
+.client-logo-btn.has-logo {
+  background: #fff !important;
 }
 
 .client-logo-overlay {

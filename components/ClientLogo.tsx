@@ -70,16 +70,20 @@ export function ClientLogo({
       const src = String(reader.result || "");
       const img = new Image();
       img.onload = () => {
-        const minSide = Math.min(img.naturalWidth, img.naturalHeight);
-        // Fit image so the shorter side fills the square at zoom 1
-        const fit = 320 / minSide;
+        const stage = 320;
+        const frameInset = 10;
+        const frame = stage - frameInset * 2; // blue crop window
+        // Contain full logo inside the framed square with a little padding
+        const pad = 0.9;
+        const fit =
+          Math.min(frame / img.naturalWidth, frame / img.naturalHeight) * pad;
         setCrop({
           src,
           naturalW: img.naturalWidth,
           naturalH: img.naturalHeight,
           zoom: fit,
-          offsetX: (320 - img.naturalWidth * fit) / 2,
-          offsetY: (320 - img.naturalHeight * fit) / 2,
+          offsetX: (stage - img.naturalWidth * fit) / 2,
+          offsetY: (stage - img.naturalHeight * fit) / 2,
         });
       };
       img.onerror = () => setErr("Could not read that image");
@@ -125,15 +129,19 @@ export function ClientLogo({
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas unavailable");
 
-    // white background so transparent logos still look clean in monogram squares
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, out, out);
+    // Transparent canvas so logos keep alpha; white only shows under CSS when needed.
+    ctx.clearRect(0, 0, out, out);
 
-    const scale = out / 320;
+    // The blue frame inset is 10px on the 320 stage — export only the framed square.
+    const stage = 320;
+    const frameInset = 10;
+    const frame = stage - frameInset * 2;
+    const scale = out / frame;
     const dw = img.naturalWidth * state.zoom * scale;
     const dh = img.naturalHeight * state.zoom * scale;
-    const dx = state.offsetX * scale;
-    const dy = state.offsetY * scale;
+    // Convert stage offsets into framed-export coordinates
+    const dx = (state.offsetX - frameInset) * scale;
+    const dy = (state.offsetY - frameInset) * scale;
     ctx.drawImage(img, dx, dy, dw, dh);
     return canvas.toDataURL("image/png");
   }
