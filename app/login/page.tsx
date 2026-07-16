@@ -40,13 +40,13 @@ export default async function LoginPage({
           />
           <div className="login-kicker">Team + client ads review</div>
           <h1 className="login-visual-title">
-            Review Meta + Google performance
-            <span> the Brandastic way.</span>
+            A premium ads war room
+            <span> for team + clients.</span>
           </h1>
           <p className="login-visual-copy">
-            One place for spend, leads, CPA, and ROAS — with left-nav updates,
-            client-branded views, and review-only access. No campaign edits from
-            this app.
+            Priority inbox, branded client reports, and AI recommendations —
+            built to replace AgencyAnalytics with a Brandastic experience. Review
+            only. No campaign edits from this app.
           </p>
 
           <div className="login-photo-grid">

@@ -15,16 +15,16 @@ const links = [
 
 const updates = [
   {
-    title: "AgencyAnalytics replacement",
-    body: "Custom client reports + AI recommendations are live in Dash.",
+    title: "Priority Inbox is live",
+    body: "Homepage now opens on what needs attention, not raw tables.",
   },
   {
-    title: "Demo mode until tokens",
-    body: "Connect Meta + Google to unlock live campaign data.",
+    title: "⌘K command palette",
+    body: "Jump to any client dashboard or branded report instantly.",
   },
   {
-    title: "Review only",
-    body: "No campaign edits, pauses, or budget changes from Dash.",
+    title: "Premium client reports",
+    body: "Deltas, AI recs, and white-label style pages for reviews.",
   },
 ];
 

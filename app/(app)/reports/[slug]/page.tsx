@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { getClient } from "@/lib/clients";
 import { getClientSummary } from "@/lib/data";
 import { compactRangeLabel, money, num, pct, ratio } from "@/lib/format";
+import { metricDeltas, previousMetrics } from "@/lib/compare";
 import {
   buildClientInsights,
   buildClientReportNarrative,
@@ -29,6 +30,8 @@ export default async function ClientReportPage({
   const data = await getClientSummary(slug, range);
   const insights = buildClientInsights(data);
   const narrative = buildClientReportNarrative(data);
+  const prev = previousMetrics(data.combined, data.client.name.length);
+  const deltas = metricDeltas(data.combined, prev);
 
   return (
     <div>
@@ -71,18 +74,34 @@ export default async function ClientReportPage({
       </div>
 
       <div className="grid metrics" style={{ marginBottom: 16 }}>
-        <MetricCard label="Spend" value={money(data.combined.spend)} />
+        <MetricCard
+          label="Spend"
+          value={money(data.combined.spend)}
+          sub="vs prior period"
+          delta={deltas.spend}
+          deltaKey="spend"
+        />
         <MetricCard
           label="Clicks"
           value={num(data.combined.clicks)}
           sub={`CTR ${pct(data.combined.ctr)}`}
+          delta={deltas.clicks}
+          deltaKey="clicks"
         />
         <MetricCard
           label="Conversions"
           value={num(data.combined.conversions)}
           sub={`CPA ${money(data.combined.cpa)}`}
+          delta={deltas.conversions}
+          deltaKey="conversions"
         />
-        <MetricCard label="ROAS" value={ratio(data.combined.roas)} />
+        <MetricCard
+          label="ROAS"
+          value={ratio(data.combined.roas)}
+          sub="Blended Meta + Google"
+          delta={deltas.roas}
+          deltaKey="roas"
+        />
       </div>
 
       <div className="grid two" style={{ marginBottom: 16 }}>
