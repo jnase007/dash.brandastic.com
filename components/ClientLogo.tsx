@@ -35,9 +35,21 @@ export function ClientLogo({
         method: "POST",
         body,
       });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        throw new Error(json?.error || "Upload failed");
+      const text = await res.text();
+      let json: any = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        throw new Error(
+          text?.slice(0, 160) ||
+            `Upload failed (${res.status}) — empty/invalid response`
+        );
+      }
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || `Upload failed (${res.status})`);
+      }
+      if (!json.url) {
+        throw new Error("Upload succeeded but no logo URL returned");
       }
       setUrl(json.url);
     } catch (e: any) {

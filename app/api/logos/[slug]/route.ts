@@ -36,7 +36,15 @@ export async function POST(
     );
   }
 
-  const form = await req.formData();
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: "Could not read upload form data" },
+      { status: 400 }
+    );
+  }
   const file = form.get("file");
   if (!file || !(file instanceof File)) {
     return NextResponse.json({ ok: false, error: "Missing file" }, { status: 400 });
