@@ -4,37 +4,37 @@ export type TeamMember = {
   image: string;
 };
 
-/** Real Brandastic.com team portraits */
+/** Real brandastic.co Team Hub avatars (spinning login faces) */
 export const TEAM: TeamMember[] = [
   {
-    name: "Justin Nase",
+    name: "Justin Nassie",
     role: "Founder / President",
-    image: "/team/justin-portrait.webp",
+    image: "/team/co-justin.jpg",
   },
   {
     name: "Sandy Ortiz",
     role: "Operations",
-    image: "/team/sandy.png",
+    image: "/team/co-sandy.jpg",
   },
   {
     name: "Melissa Hatch",
     role: "Marketing",
-    image: "/team/melissa.png",
+    image: "/team/co-melissa.jpg",
   },
   {
     name: "Maxwell Gilbert",
     role: "Email / Copy",
-    image: "/team/maxwell.png",
+    image: "/team/co-maxwell.png",
   },
   {
-    name: "Stacy",
+    name: "Erin Clancy",
     role: "Team",
-    image: "/team/stacy.png",
+    image: "/team/co-erin.jpg",
   },
   {
-    name: "Megan Hahn",
+    name: "Jordan Nassie",
     role: "Team",
-    image: "/team/megan.png",
+    image: "/team/co-jordan.jpg",
   },
 ];
 

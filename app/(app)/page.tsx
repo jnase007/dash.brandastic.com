@@ -77,7 +77,7 @@ export default async function OverviewPage({
         <div className="premium-hero-visual">
           <img src="/team/office-team.webp" alt="Brandastic team" />
           <div className="premium-hero-float">
-            <img src="/team/justin-portrait.webp" alt="Justin" />
+            <img src="/team/co-justin.jpg" alt="Justin" />
             <div>
               <strong>Brandastic standard</strong>
               <span>Premium, fast, review-only</span>

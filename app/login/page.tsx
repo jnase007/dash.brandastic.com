@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { LoginCarousel } from "@/components/LoginCarousel";
 import { COOKIE, isAuthed, sessionCookieValue } from "@/lib/auth";
 import { TEAM } from "@/lib/brand";
 
@@ -30,57 +31,17 @@ export default async function LoginPage({
   const sp = await searchParams;
 
   return (
-    <div className="login-shell">
-      <section className="login-visual">
-        <div className="login-visual-inner">
-          <img
-            src="/brand/logo-export.svg"
-            alt="Brandastic"
-            className="login-logo-light"
-          />
-          <div className="login-kicker">Team + client ads review</div>
-          <h1 className="login-visual-title">
-            A premium ads war room
-            <span> for team + clients.</span>
-          </h1>
-          <p className="login-visual-copy">
-            Priority inbox, branded client reports, and AI recommendations —
-            built to replace AgencyAnalytics with a Brandastic experience. Review
-            only. No campaign edits from this app.
-          </p>
-
-          <div className="login-photo-grid">
-            <div className="login-photo large">
-              <img src="/team/office-team.webp" alt="Brandastic team" />
-            </div>
-            <div className="login-photo">
-              <img src="/team/justin-portrait.webp" alt="Justin Nase" />
-            </div>
-            <div className="login-photo">
-              <img src="/team/office-3.jpg" alt="Brandastic office" />
-            </div>
-          </div>
-
-          <div className="login-team-row">
-            {TEAM.map((m) => (
-              <div key={m.name} className="login-team-chip">
-                <img src={m.image} alt={m.name} />
-                <div>
-                  <strong>{m.name}</strong>
-                  <span>{m.role}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+    <div className="login-shell brandastic-co">
+      <section className="login-visual full-bleed">
+        <LoginCarousel />
       </section>
 
       <section className="login-panel">
-        <div className="login-card brandastic">
+        <div className="login-card brandastic clean">
           <img
-            src="/brand/logo-black.png"
+            src="/brand/mark.png"
             alt="Brandastic"
-            className="login-logo-dark"
+            className="login-mark"
           />
           <div className="login-badge">dash.brandastic.com</div>
           <h2>Welcome back</h2>
@@ -114,6 +75,12 @@ export default async function LoginPage({
               Enter Ads Dash
             </button>
           </form>
+
+          <div className="login-team-mini">
+            {TEAM.slice(0, 6).map((m) => (
+              <img key={m.name} src={m.image} alt={m.name} title={m.name} />
+            ))}
+          </div>
 
           <div className="login-foot">
             Review-only · No budgets, ads, or audiences can be changed here

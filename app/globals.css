@@ -718,6 +718,10 @@ code {
   background: #fff;
 }
 
+.login-shell.brandastic-co {
+  grid-template-columns: 1fr 1fr;
+}
+
 .login-visual {
   position: relative;
   overflow: hidden;
@@ -727,6 +731,107 @@ code {
     linear-gradient(160deg, #07122a 0%, #0d1f45 45%, #12306b 100%);
   color: #fff;
   padding: 40px;
+}
+
+.login-visual.full-bleed {
+  padding: 0;
+  background: #0b1220;
+}
+
+.login-carousel {
+  position: absolute;
+  inset: 0;
+}
+
+.login-carousel img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.08);
+  transition: opacity 1.2s ease, transform 8s ease;
+}
+
+.login-carousel img.is-active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.login-carousel-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.28));
+}
+
+.login-carousel-copy {
+  position: absolute;
+  left: 48px;
+  right: 48px;
+  bottom: 48px;
+  z-index: 2;
+  max-width: 460px;
+}
+
+.login-carousel-copy h2 {
+  font-size: clamp(28px, 3.4vw, 40px);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+  margin-bottom: 12px;
+}
+
+.login-carousel-copy p {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 16px;
+  max-width: 42ch;
+}
+
+.login-card.brandastic.clean {
+  width: min(380px, 100%);
+  box-shadow: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  text-align: center;
+}
+
+.login-card.brandastic.clean .stack {
+  text-align: left;
+}
+
+.login-card.brandastic.clean .login-badge {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.login-card.brandastic.clean .login-foot {
+  border-top: none;
+  padding-top: 8px;
+}
+
+.login-mark {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  margin: 0 auto 18px;
+  display: block;
+}
+
+.login-team-mini {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.login-team-mini img {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 2px solid #fff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
 }
 
 .login-visual-inner {
@@ -779,11 +884,89 @@ code {
   max-width: 48ch;
 }
 
+.login-orbit-wrap {
+  display: grid;
+  place-items: center;
+  margin: 8px 0 4px;
+}
+
+.team-orbit {
+  position: relative;
+  width: min(320px, 72vw);
+  height: min(320px, 72vw);
+}
+
+.team-orbit-ring {
+  position: absolute;
+  inset: 0;
+  animation: orbit-spin 28s linear infinite;
+}
+
+.team-orbit-face {
+  --angle: calc((360deg / var(--n)) * var(--i));
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 72px;
+  height: 72px;
+  margin: -36px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  transform: rotate(var(--angle)) translate(120px) rotate(calc(-1 * var(--angle)));
+  background: #fff;
+}
+
+.team-orbit-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+  animation: orbit-counter 28s linear infinite;
+}
+
+.team-orbit-core {
+  position: absolute;
+  inset: 50%;
+  width: 88px;
+  height: 88px;
+  margin: -44px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: grid;
+  place-items: center;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.team-orbit-core img {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+}
+
+@keyframes orbit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes orbit-counter {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
 .login-photo-grid {
   display: grid;
   grid-template-columns: 1.4fr 1fr 1fr;
   gap: 12px;
   margin-top: 8px;
+}
+
+.login-photo-grid.compact {
+  margin-top: 4px;
 }
 
 .login-photo {
