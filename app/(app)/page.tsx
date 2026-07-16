@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { ClientLogo } from "@/components/ClientLogo";
 import { InsightList } from "@/components/InsightList";
 import { MetricCard } from "@/components/MetricCard";
 import { RangeSelect } from "@/components/RangeSelect";
@@ -9,6 +10,7 @@ import { metricDeltas, previousMetrics } from "@/lib/compare";
 import { getPortfolio } from "@/lib/data";
 import { compactRangeLabel, money, num, pct, ratio } from "@/lib/format";
 import { getPortfolioInsights } from "@/lib/insights";
+import { getClientLogoMap } from "@/lib/logos";
 
 export default async function OverviewPage({
   searchParams,
@@ -24,6 +26,7 @@ export default async function OverviewPage({
   const insights = ai.insights;
   const priority = insights.filter((i) => i.severity === "high" || i.severity === "medium").slice(0, 6);
   const wins = insights.filter((i) => i.severity === "positive").slice(0, 3);
+  const logos = await getClientLogoMap(data.clients.map((c) => c.client.slug));
 
   const ranked = [...data.clients]
     .filter((c) => c.combined.spend > 0)
@@ -217,12 +220,15 @@ export default async function OverviewPage({
                 >
                   <div className="client-row-left">
                     <div className="rank-chip">{idx + 1}</div>
-                    <div
-                      className="client-avatar"
-                      style={{ background: brand.accent }}
-                    >
-                      {brand.monogram}
-                    </div>
+                    <ClientLogo
+                      slug={c.client.slug}
+                      name={c.client.name}
+                      monogram={brand.monogram}
+                      accent={brand.accent}
+                      logoUrl={logos[c.client.slug]}
+                      size={40}
+                      editable={false}
+                    />
                     <div>
                       <div className="client-name">{c.client.name}</div>
                       <div className="client-meta">
@@ -263,12 +269,15 @@ export default async function OverviewPage({
                 className="client-row"
               >
                 <div className="client-row-left">
-                  <div
-                    className="client-avatar"
-                    style={{ background: brand.accent }}
-                  >
-                    {brand.monogram}
-                  </div>
+                  <ClientLogo
+                    slug={c.client.slug}
+                    name={c.client.name}
+                    monogram={brand.monogram}
+                    accent={brand.accent}
+                    logoUrl={logos[c.client.slug]}
+                    size={40}
+                    editable={false}
+                  />
                   <div>
                     <div className="client-name">{c.client.name}</div>
                     <div className="client-meta">

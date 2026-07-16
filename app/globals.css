@@ -1777,3 +1777,87 @@ code {
     grid-template-columns: 1fr;
   }
 }
+
+.client-logo-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.client-logo-btn {
+  border: 0;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+  padding: 0;
+}
+
+.client-logo-btn.has-logo {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.client-logo-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #fff;
+  display: block;
+  padding: 4px;
+}
+
+.client-logo-overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  background: rgba(2, 6, 23, 0.72);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.client-logo-btn:hover .client-logo-overlay,
+.client-logo-btn:focus-visible .client-logo-overlay {
+  opacity: 1;
+}
+
+.client-logo-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.client-logo-error {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  z-index: 5;
+  white-space: nowrap;
+  background: #fff1f2;
+  color: #be123c;
+  border: 1px solid rgba(190, 18, 60, 0.2);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

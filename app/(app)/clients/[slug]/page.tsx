@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { getClient } from "@/lib/clients";
 import { getClientSummary } from "@/lib/data";
 import { compactRangeLabel, money, num, pct, ratio } from "@/lib/format";
+import { getClientLogoUrl } from "@/lib/logos";
 
 export default async function ClientDetailPage({
   params,
@@ -23,6 +24,7 @@ export default async function ClientDetailPage({
   if (!base) notFound();
 
   const data = await getClientSummary(slug, range);
+  const logoUrl = await getClientLogoUrl(slug);
 
   return (
     <div>
@@ -33,6 +35,7 @@ export default async function ClientDetailPage({
             slug={data.client.slug}
             industry={data.client.industry}
             rangeLabel={compactRangeLabel(range)}
+            logoUrl={logoUrl}
           />
         </div>
         <div className="top-actions">
