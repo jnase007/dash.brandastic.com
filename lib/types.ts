@@ -30,6 +30,36 @@ export type CampaignRow = {
   metrics: MetricSet;
 };
 
+export type CreativeAsset = {
+  type: "image" | "video" | "carousel" | "unknown";
+  url?: string;
+  thumbnailUrl?: string;
+  name?: string;
+};
+
+export type AdCreativeRow = {
+  id: string;
+  name: string;
+  status: string;
+  primaryText?: string;
+  headline?: string;
+  description?: string;
+  cta?: string;
+  linkUrl?: string;
+  metrics: MetricSet;
+  assets: CreativeAsset[];
+};
+
+export type CampaignDetail = {
+  clientSlug: string;
+  clientName: string;
+  campaign: CampaignRow;
+  ads: AdCreativeRow[];
+  range: string;
+  source: "live" | "demo" | "partial";
+  notes?: string[];
+};
+
 export type ClientSummary = {
   client: ClientAccount;
   range: string;

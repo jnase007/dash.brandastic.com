@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ClientBrandHeader } from "@/components/ClientBrandHeader";
@@ -131,7 +132,14 @@ export default async function ClientDetailPage({
       </div>
 
       <div className="card">
-        <h3>Campaigns</h3>
+        <div className="card-head-row">
+          <div>
+            <h3>Campaigns</h3>
+            <p className="muted" style={{ margin: "4px 0 0" }}>
+              Click a Meta campaign to open ads + creative previews.
+            </p>
+          </div>
+        </div>
         <table className="table">
           <thead>
             <tr>
@@ -142,28 +150,53 @@ export default async function ClientDetailPage({
               <th>Clicks</th>
               <th>Conv.</th>
               <th>CPA</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            {data.campaigns.map((c) => (
-              <tr key={`${c.platform}-${c.id}`}>
-                <td>
-                  <div className="client-name">{c.name}</div>
-                  {c.objective ? <div className="client-meta">{c.objective}</div> : null}
-                </td>
-                <td>
-                  <span className="badge muted">{c.platform}</span>
-                </td>
-                <td>{c.status}</td>
-                <td className="mono">{money(c.metrics.spend)}</td>
-                <td className="mono">{num(c.metrics.clicks)}</td>
-                <td className="mono">{num(c.metrics.conversions)}</td>
-                <td className="mono">{money(c.metrics.cpa)}</td>
-              </tr>
-            ))}
+            {data.campaigns.map((c) => {
+              const href =
+                c.platform === "meta"
+                  ? `/clients/${data.client.slug}/campaigns/${encodeURIComponent(c.id)}?range=${encodeURIComponent(range)}&platform=meta`
+                  : null;
+              return (
+                <tr key={`${c.platform}-${c.id}`} className={href ? "row-clickable" : undefined}>
+                  <td>
+                    {href ? (
+                      <Link href={href} className="campaign-link">
+                        <div className="client-name">{c.name}</div>
+                        {c.objective ? <div className="client-meta">{c.objective}</div> : null}
+                      </Link>
+                    ) : (
+                      <>
+                        <div className="client-name">{c.name}</div>
+                        {c.objective ? <div className="client-meta">{c.objective}</div> : null}
+                      </>
+                    )}
+                  </td>
+                  <td>
+                    <span className="badge muted">{c.platform}</span>
+                  </td>
+                  <td>{c.status}</td>
+                  <td className="mono">{money(c.metrics.spend)}</td>
+                  <td className="mono">{num(c.metrics.clicks)}</td>
+                  <td className="mono">{num(c.metrics.conversions)}</td>
+                  <td className="mono">{money(c.metrics.cpa)}</td>
+                  <td>
+                    {href ? (
+                      <Link href={href} className="btn ghost small">
+                        Open ads
+                      </Link>
+                    ) : (
+                      <span className="muted">Google soon</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
             {!data.campaigns.length ? (
               <tr>
-                <td colSpan={7} className="muted">
+                <td colSpan={8} className="muted">
                   No campaigns yet for this client/range.
                 </td>
               </tr>

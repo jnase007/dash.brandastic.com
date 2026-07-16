@@ -1,8 +1,12 @@
 import { CLIENTS, getClient } from "./clients";
 import { buildDemoClient, buildDemoPortfolio, sumMetrics } from "./demo-data";
 import { fetchGoogleCustomerInsights, googleConfigured } from "./google-ads";
-import { fetchMetaAccountInsights, metaConfigured } from "./meta";
-import type { ClientSummary, PortfolioSummary } from "./types";
+import {
+  fetchMetaAccountInsights,
+  fetchMetaCampaignDetail,
+  metaConfigured,
+} from "./meta";
+import type { CampaignDetail, ClientSummary, PortfolioSummary } from "./types";
 
 function forceDemo() {
   return process.env.FORCE_DEMO_DATA === "true";
@@ -115,4 +119,61 @@ export async function getClientSummary(
     source,
     notes: notes.length ? notes : undefined,
   };
+}
+
+export async function getCampaignDetail(
+  slug: string,
+  campaignId: string,
+  range = "30d",
+  platform: "meta" | "google" = "meta"
+): Promise<CampaignDetail> {
+  const client = getClient(slug);
+  if (!client) throw new Error("Client not found");
+
+  if (platform === "google") {
+    return {
+      clientSlug: client.slug,
+      clientName: client.name,
+      campaign: {
+        id: campaignId,
+        name: `Google campaign ${campaignId}`,
+        platform: "google",
+        status: "UNKNOWN",
+        metrics: sumMetrics(null, null),
+      },
+      ads: [],
+      range,
+      source: "partial",
+      notes: [
+        "Google Ads creative drill-down needs Google API credentials first.",
+      ],
+    };
+  }
+
+  if (!client.metaAccountId || !metaConfigured()) {
+    // demo-ish fallback so UI still works
+    return {
+      clientSlug: client.slug,
+      clientName: client.name,
+      campaign: {
+        id: campaignId,
+        name: "Sample Meta campaign",
+        platform: "meta",
+        status: "ACTIVE",
+        metrics: sumMetrics(null, null),
+      },
+      ads: [],
+      range,
+      source: "demo",
+      notes: ["Meta not connected or account not mapped for this client."],
+    };
+  }
+
+  return fetchMetaCampaignDetail({
+    accountId: client.metaAccountId,
+    campaignId,
+    range,
+    clientSlug: client.slug,
+    clientName: client.name,
+  });
 }

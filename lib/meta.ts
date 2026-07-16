@@ -1,4 +1,10 @@
-import type { CampaignRow, MetricSet } from "./types";
+import type {
+  AdCreativeRow,
+  CampaignDetail,
+  CampaignRow,
+  CreativeAsset,
+  MetricSet,
+} from "./types";
 import { datePreset } from "./format";
 
 const API_VERSION = process.env.META_API_VERSION || "v21.0";
@@ -64,6 +70,180 @@ function insightToMetrics(row: any): MetricSet {
   };
 }
 
+function emptyMetrics(): MetricSet {
+  return {
+    spend: 0,
+    impressions: 0,
+    clicks: 0,
+    conversions: 0,
+    ctr: 0,
+    cpc: null,
+    cpa: null,
+    roas: null,
+  };
+}
+
+function firstText(items: any[] | undefined) {
+  if (!Array.isArray(items) || !items.length) return undefined;
+  const val = items[0]?.text ?? items[0]?.name ?? items[0]?.value;
+  return val ? String(val) : undefined;
+}
+
+async function resolveImageHashes(act: string, hashes: string[]) {
+  const unique = Array.from(new Set(hashes.filter(Boolean)));
+  const map = new Map<string, string>();
+  if (!unique.length) return map;
+
+  // Graph supports hash lookup via adimages
+  const json = await graph(`/${act}/adimages`, {
+    hashes: JSON.stringify(unique),
+    fields: "hash,url,permalink_url,name,width,height",
+  });
+  const data = json?.data || {};
+  // response can be object keyed by hash or array
+  if (Array.isArray(data)) {
+    for (const row of data) {
+      if (row?.hash && (row.url || row.permalink_url)) {
+        map.set(String(row.hash), String(row.url || row.permalink_url));
+      }
+    }
+  } else if (data && typeof data === "object") {
+    for (const [hash, row] of Object.entries<any>(data)) {
+      if (row?.url || row?.permalink_url) {
+        map.set(String(hash), String(row.url || row.permalink_url));
+      } else if ((row as any)?.hash && ((row as any).url || (row as any).permalink_url)) {
+        map.set(String((row as any).hash), String((row as any).url || (row as any).permalink_url));
+      }
+    }
+  }
+  return map;
+}
+
+function collectHashes(creative: any): string[] {
+  const hashes: string[] = [];
+  if (creative?.image_hash) hashes.push(String(creative.image_hash));
+  const oss = creative?.object_story_spec || {};
+  if (oss?.link_data?.image_hash) hashes.push(String(oss.link_data.image_hash));
+  if (Array.isArray(oss?.link_data?.child_attachments)) {
+    for (const child of oss.link_data.child_attachments) {
+      if (child?.image_hash) hashes.push(String(child.image_hash));
+    }
+  }
+  if (Array.isArray(creative?.asset_feed_spec?.images)) {
+    for (const img of creative.asset_feed_spec.images) {
+      if (img?.hash) hashes.push(String(img.hash));
+    }
+  }
+  return hashes;
+}
+
+function extractAssets(creative: any, hashMap: Map<string, string>): CreativeAsset[] {
+  const assets: CreativeAsset[] = [];
+  const seen = new Set<string>();
+  const push = (asset: CreativeAsset) => {
+    const key = asset.url || asset.thumbnailUrl || asset.name || Math.random().toString();
+    if (seen.has(key)) return;
+    seen.add(key);
+    assets.push(asset);
+  };
+
+  if (creative?.image_url) {
+    push({ type: "image", url: String(creative.image_url), thumbnailUrl: creative.thumbnail_url });
+  }
+  if (creative?.image_hash && hashMap.get(String(creative.image_hash))) {
+    push({
+      type: "image",
+      url: hashMap.get(String(creative.image_hash)),
+      thumbnailUrl: creative.thumbnail_url,
+    });
+  }
+
+  const oss = creative?.object_story_spec || {};
+  const linkData = oss?.link_data || {};
+  if (linkData?.image_hash && hashMap.get(String(linkData.image_hash))) {
+    push({
+      type: Array.isArray(linkData.child_attachments) ? "carousel" : "image",
+      url: hashMap.get(String(linkData.image_hash)),
+      name: linkData.name || creative?.title,
+    });
+  }
+  if (Array.isArray(linkData?.child_attachments)) {
+    for (const child of linkData.child_attachments) {
+      const url = child?.image_hash ? hashMap.get(String(child.image_hash)) : undefined;
+      push({
+        type: "carousel",
+        url,
+        thumbnailUrl: child?.picture,
+        name: child?.name,
+      });
+    }
+  }
+
+  const afs = creative?.asset_feed_spec || {};
+  if (Array.isArray(afs.images)) {
+    for (const img of afs.images) {
+      const url = img?.hash ? hashMap.get(String(img.hash)) : img?.url;
+      push({ type: "image", url, name: img?.name });
+    }
+  }
+  if (Array.isArray(afs.videos)) {
+    for (const vid of afs.videos) {
+      push({
+        type: "video",
+        thumbnailUrl: vid?.thumbnail_url || creative?.thumbnail_url,
+        name: vid?.video_id ? `Video ${vid.video_id}` : "Video",
+      });
+    }
+  }
+
+  if (!assets.length && creative?.thumbnail_url) {
+    push({
+      type: creative?.video_id || afs?.videos?.length ? "video" : "image",
+      thumbnailUrl: String(creative.thumbnail_url),
+      url: creative.image_url ? String(creative.image_url) : undefined,
+    });
+  }
+
+  return assets;
+}
+
+function extractCopy(creative: any) {
+  const oss = creative?.object_story_spec || {};
+  const linkData = oss?.link_data || {};
+  const afs = creative?.asset_feed_spec || {};
+  const primaryText =
+    creative?.body ||
+    linkData?.message ||
+    firstText(afs?.bodies) ||
+    undefined;
+  const headline =
+    creative?.title ||
+    linkData?.name ||
+    firstText(afs?.titles) ||
+    undefined;
+  const description =
+    linkData?.description ||
+    firstText(afs?.descriptions) ||
+    undefined;
+  const cta =
+    creative?.call_to_action_type ||
+    linkData?.call_to_action?.type ||
+    (Array.isArray(afs?.call_to_action_types) ? afs.call_to_action_types[0] : undefined);
+  const linkUrl =
+    creative?.link_url ||
+    linkData?.link ||
+    afs?.link_urls?.[0]?.website_url ||
+    afs?.link_urls?.[0]?.display_url ||
+    undefined;
+  return {
+    primaryText: primaryText ? String(primaryText) : undefined,
+    headline: headline ? String(headline) : undefined,
+    description: description ? String(description) : undefined,
+    cta: cta ? String(cta) : undefined,
+    linkUrl: linkUrl ? String(linkUrl) : undefined,
+  };
+}
+
 /** READ ONLY insights for one ad account. */
 export async function fetchMetaAccountInsights(accountId: string, range: string) {
   const act = accountId.startsWith("act_") ? accountId : `act_${accountId}`;
@@ -92,4 +272,114 @@ export async function fetchMetaAccountInsights(accountId: string, range: string)
   }));
 
   return { metrics: accountMetrics, campaigns: campaignRows };
+}
+
+/** READ ONLY campaign + ads + creative previews for one Meta campaign. */
+export async function fetchMetaCampaignDetail(opts: {
+  accountId: string;
+  campaignId: string;
+  range: string;
+  clientSlug: string;
+  clientName: string;
+}): Promise<CampaignDetail> {
+  const act = opts.accountId.startsWith("act_")
+    ? opts.accountId
+    : `act_${opts.accountId}`;
+  const { since, until } = datePreset(opts.range);
+  const notes: string[] = [];
+
+  const campaignInsights = await graph(`/${act}/insights`, {
+    fields:
+      "campaign_id,campaign_name,spend,impressions,clicks,ctr,cpc,actions,action_values",
+    time_range: JSON.stringify({ since, until }),
+    level: "campaign",
+    filtering: JSON.stringify([
+      { field: "campaign.id", operator: "EQUAL", value: opts.campaignId },
+    ]),
+    limit: "1",
+  });
+
+  let campaignMeta: any = null;
+  try {
+    campaignMeta = await graph(`/${opts.campaignId}`, {
+      fields: "id,name,status,effective_status,objective",
+    });
+  } catch (e: any) {
+    notes.push(`Campaign metadata: ${e.message || "unavailable"}`);
+  }
+
+  const campRow = (campaignInsights.data || [])[0] || {};
+  const campaign: CampaignRow = {
+    id: opts.campaignId,
+    name:
+      campaignMeta?.name ||
+      campRow.campaign_name ||
+      `Campaign ${opts.campaignId}`,
+    platform: "meta",
+    status: campaignMeta?.effective_status || campaignMeta?.status || "UNKNOWN",
+    objective: campaignMeta?.objective || undefined,
+    metrics: campRow.campaign_id ? insightToMetrics(campRow) : emptyMetrics(),
+  };
+
+  const adsJson = await graph(`/${opts.campaignId}/ads`, {
+    fields:
+      "id,name,status,effective_status,creative{id,name,title,body,image_url,thumbnail_url,object_type,object_story_spec,asset_feed_spec,video_id,image_hash,link_url,call_to_action_type}",
+    limit: "50",
+  });
+
+  const adInsights = await graph(`/${act}/insights`, {
+    fields:
+      "ad_id,ad_name,spend,impressions,clicks,ctr,cpc,actions,action_values",
+    time_range: JSON.stringify({ since, until }),
+    level: "ad",
+    filtering: JSON.stringify([
+      { field: "campaign.id", operator: "EQUAL", value: opts.campaignId },
+    ]),
+    limit: "50",
+  });
+
+  const metricsByAd = new Map<string, MetricSet>();
+  for (const row of adInsights.data || []) {
+    if (row?.ad_id) metricsByAd.set(String(row.ad_id), insightToMetrics(row));
+  }
+
+  const creatives = (adsJson.data || []).map((ad: any) => ad.creative || {});
+  const allHashes = creatives.flatMap((c: any) => collectHashes(c));
+  let hashMap = new Map<string, string>();
+  try {
+    hashMap = await resolveImageHashes(act, allHashes);
+  } catch (e: any) {
+    notes.push(`Creative images: ${e.message || "hash resolve failed"}`);
+  }
+
+  const ads: AdCreativeRow[] = (adsJson.data || []).map((ad: any) => {
+    const creative = ad.creative || {};
+    const copy = extractCopy(creative);
+    const assets = extractAssets(creative, hashMap);
+    return {
+      id: String(ad.id),
+      name: ad.name || `Ad ${ad.id}`,
+      status: ad.effective_status || ad.status || "UNKNOWN",
+      primaryText: copy.primaryText,
+      headline: copy.headline,
+      description: copy.description,
+      cta: copy.cta,
+      linkUrl: copy.linkUrl,
+      metrics: metricsByAd.get(String(ad.id)) || emptyMetrics(),
+      assets,
+    };
+  });
+
+  // sort by spend desc
+  ads.sort((a, b) => b.metrics.spend - a.metrics.spend);
+
+  return {
+    clientSlug: opts.clientSlug,
+    clientName: opts.clientName,
+    campaign,
+    ads,
+    range: opts.range,
+    source: "live",
+    notes: notes.length ? notes : undefined,
+  };
 }
