@@ -4,6 +4,7 @@ export type TeamMember = {
   image: string;
 };
 
+/** Real Brandastic.com team portraits */
 export const TEAM: TeamMember[] = [
   {
     name: "Justin Nase",
@@ -13,22 +14,27 @@ export const TEAM: TeamMember[] = [
   {
     name: "Sandy Ortiz",
     role: "Operations",
-    image: "/team/team-1.jpg",
+    image: "/team/sandy.png",
   },
   {
     name: "Melissa Hatch",
     role: "Marketing",
-    image: "/team/team-2.jpg",
+    image: "/team/melissa.png",
   },
   {
-    name: "Chloe",
-    role: "Social",
-    image: "/team/team-3.jpg",
-  },
-  {
-    name: "Maxwell",
+    name: "Maxwell Gilbert",
     role: "Email / Copy",
-    image: "/team/team-4.jpg",
+    image: "/team/maxwell.png",
+  },
+  {
+    name: "Stacy",
+    role: "Team",
+    image: "/team/stacy.png",
+  },
+  {
+    name: "Megan Hahn",
+    role: "Team",
+    image: "/team/megan.png",
   },
 ];
 

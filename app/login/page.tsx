@@ -51,13 +51,13 @@ export default async function LoginPage({
 
           <div className="login-photo-grid">
             <div className="login-photo large">
-              <img src="/team/office-1.png" alt="Brandastic team" />
+              <img src="/team/office-team.webp" alt="Brandastic team" />
             </div>
             <div className="login-photo">
               <img src="/team/justin-portrait.webp" alt="Justin Nase" />
             </div>
             <div className="login-photo">
-              <img src="/team/office-2.png" alt="Brandastic office" />
+              <img src="/team/office-3.jpg" alt="Brandastic office" />
             </div>
           </div>
 

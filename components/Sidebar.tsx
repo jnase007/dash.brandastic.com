@@ -68,7 +68,7 @@ export function Sidebar() {
 
       <div className="nav-label">Team</div>
       <div className="team-stack">
-        {TEAM.slice(0, 4).map((m) => (
+        {TEAM.slice(0, 5).map((m) => (
           <div key={m.name} className="team-mini">
             <img src={m.image} alt={m.name} />
             <div>
