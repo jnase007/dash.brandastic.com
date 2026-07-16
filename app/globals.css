@@ -1309,6 +1309,18 @@ code {
   margin-bottom: 16px;
 }
 
+.premium-hero-copy .btn.ghost {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+
+.premium-hero-copy .btn.ghost:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.42);
+  color: #fff;
+}
+
 .premium-hero-visual {
   position: relative;
   min-height: 240px;
