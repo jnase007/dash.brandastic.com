@@ -1,0 +1,118 @@
+import { CLIENTS, getClient } from "./clients";
+import { buildDemoClient, buildDemoPortfolio, sumMetrics } from "./demo-data";
+import { fetchGoogleCustomerInsights, googleConfigured } from "./google-ads";
+import { fetchMetaAccountInsights, metaConfigured } from "./meta";
+import type { ClientSummary, PortfolioSummary } from "./types";
+
+function forceDemo() {
+  return process.env.FORCE_DEMO_DATA === "true";
+}
+
+export async function getPortfolio(range = "30d"): Promise<PortfolioSummary> {
+  const metaOk = metaConfigured();
+  const googleOk = googleConfigured();
+
+  if (forceDemo() || (!metaOk && !googleOk)) {
+    const demo = buildDemoPortfolio(range);
+    return demo;
+  }
+
+  const clients: ClientSummary[] = [];
+  const notes: string[] = [];
+
+  for (const client of CLIENTS) {
+    try {
+      clients.push(await getClientSummary(client.slug, range));
+    } catch (e: any) {
+      notes.push(`${client.name}: ${e.message || "failed"}`);
+      clients.push(buildDemoClient(client, range));
+    }
+  }
+
+  const totals = clients.reduce(
+    (acc, c) => sumMetrics(acc, c.combined),
+    sumMetrics(null, null)
+  );
+
+  const anyLive = clients.some((c) => c.source === "live" || c.source === "partial");
+  return {
+    range,
+    totals,
+    clients,
+    connection: {
+      meta: metaOk ? "connected" : "missing",
+      google: googleOk ? "connected" : "missing",
+    },
+    generatedAt: new Date().toISOString(),
+    mode: anyLive ? (metaOk && googleOk ? "live" : "partial") : "demo",
+  };
+}
+
+export async function getClientSummary(
+  slug: string,
+  range = "30d"
+): Promise<ClientSummary> {
+  const client = getClient(slug);
+  if (!client) throw new Error("Client not found");
+
+  if (forceDemo() || (!metaConfigured() && !googleConfigured())) {
+    return buildDemoClient(client, range);
+  }
+
+  let meta = null;
+  let google = null;
+  let metaCampaigns = [] as Awaited<
+    ReturnType<typeof fetchMetaAccountInsights>
+  >["campaigns"];
+  let googleCampaigns = [] as Awaited<
+    ReturnType<typeof fetchGoogleCustomerInsights>
+  >["campaigns"];
+  const notes: string[] = [];
+
+  if (client.metaAccountId && metaConfigured()) {
+    try {
+      const res = await fetchMetaAccountInsights(client.metaAccountId, range);
+      meta = res.metrics;
+      metaCampaigns = res.campaigns;
+    } catch (e: any) {
+      notes.push(`Meta: ${e.message || "error"}`);
+    }
+  } else if (!client.metaAccountId) {
+    notes.push("Meta account ID not mapped yet.");
+  }
+
+  if (client.googleCustomerId && googleConfigured()) {
+    try {
+      const res = await fetchGoogleCustomerInsights(client.googleCustomerId, range);
+      google = res.metrics;
+      googleCampaigns = res.campaigns;
+    } catch (e: any) {
+      notes.push(`Google: ${e.message || "error"}`);
+    }
+  } else if (!client.googleCustomerId) {
+    notes.push("Google Ads customer ID not mapped yet.");
+  }
+
+  const source =
+    meta || google
+      ? meta && google
+        ? "live"
+        : "partial"
+      : "demo";
+
+  // If no live data, fall back to demo for review UI
+  if (source === "demo") return buildDemoClient(client, range);
+
+  return {
+    client,
+    range,
+    meta,
+    google,
+    combined: sumMetrics(meta, google),
+    campaigns: [...metaCampaigns, ...googleCampaigns].sort(
+      (a, b) => b.metrics.spend - a.metrics.spend
+    ),
+    source,
+    notes: notes.length ? notes : undefined,
+  };
+}
