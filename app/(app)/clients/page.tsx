@@ -5,7 +5,7 @@ import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import { clientBrand } from "@/lib/brand";
 import { getPortfolio } from "@/lib/data";
-import { compactRangeLabel, money, num, ratio } from "@/lib/format";
+import { compactRangeLabel, money, normalizeRange, num, ratio } from "@/lib/format";
 import { getClientLogoMap } from "@/lib/logos";
 
 export default async function ClientsPage({
@@ -14,7 +14,7 @@ export default async function ClientsPage({
   searchParams: Promise<{ range?: string }>;
 }) {
   const sp = await searchParams;
-  const range = sp.range || "30d";
+  const range = normalizeRange(sp.range);
   const data = await getPortfolio(range);
   const logos = await getClientLogoMap(data.clients.map((c) => c.client.slug));
 

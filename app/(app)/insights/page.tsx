@@ -4,7 +4,7 @@ import { InsightList } from "@/components/InsightList";
 import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getPortfolio } from "@/lib/data";
-import { compactRangeLabel } from "@/lib/format";
+import { compactRangeLabel, normalizeRange } from "@/lib/format";
 import { getPortfolioInsights } from "@/lib/insights";
 
 export default async function InsightsPage({
@@ -13,7 +13,7 @@ export default async function InsightsPage({
   searchParams: Promise<{ range?: string }>;
 }) {
   const sp = await searchParams;
-  const range = sp.range || "30d";
+  const range = normalizeRange(sp.range);
   const data = await getPortfolio(range);
   const ai = await getPortfolioInsights(data, { limit: 24 });
   const insights = ai.insights;

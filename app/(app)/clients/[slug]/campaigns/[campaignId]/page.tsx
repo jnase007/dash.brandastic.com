@@ -6,7 +6,7 @@ import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getClient } from "@/lib/clients";
 import { getCampaignDetail } from "@/lib/data";
-import { compactRangeLabel, money, num, pct, ratio } from "@/lib/format";
+import { compactRangeLabel, money, normalizeRange, num, pct, ratio } from "@/lib/format";
 
 export default async function CampaignDetailPage({
   params,
@@ -17,7 +17,7 @@ export default async function CampaignDetailPage({
 }) {
   const { slug, campaignId } = await params;
   const sp = await searchParams;
-  const range = sp.range || "30d";
+  const range = normalizeRange(sp.range);
   const platform = sp.platform === "google" ? "google" : "meta";
   const base = getClient(slug);
   if (!base) notFound();

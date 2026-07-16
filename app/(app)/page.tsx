@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { clientBrand } from "@/lib/brand";
 import { metricDeltas, previousMetrics } from "@/lib/compare";
 import { getPortfolio } from "@/lib/data";
-import { compactRangeLabel, money, num, pct, ratio } from "@/lib/format";
+import { compactRangeLabel, money, normalizeRange, num, pct, ratio } from "@/lib/format";
 import { getPortfolioInsights } from "@/lib/insights";
 import { getClientLogoMap } from "@/lib/logos";
 
@@ -18,7 +18,7 @@ export default async function OverviewPage({
   searchParams: Promise<{ range?: string }>;
 }) {
   const sp = await searchParams;
-  const range = sp.range || "30d";
+  const range = normalizeRange(sp.range);
   const data = await getPortfolio(range);
   const prev = previousMetrics(data.totals, 3);
   const deltas = metricDeltas(data.totals, prev);

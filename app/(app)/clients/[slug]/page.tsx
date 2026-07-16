@@ -7,7 +7,7 @@ import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getClient } from "@/lib/clients";
 import { getClientSummary } from "@/lib/data";
-import { compactRangeLabel, money, num, pct, ratio } from "@/lib/format";
+import { compactRangeLabel, money, normalizeRange, num, pct, ratio } from "@/lib/format";
 import { getClientLogoUrl } from "@/lib/logos";
 
 export default async function ClientDetailPage({
@@ -19,7 +19,7 @@ export default async function ClientDetailPage({
 }) {
   const { slug } = await params;
   const sp = await searchParams;
-  const range = sp.range || "30d";
+  const range = normalizeRange(sp.range);
   const base = getClient(slug);
   if (!base) notFound();
 

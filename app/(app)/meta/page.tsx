@@ -4,7 +4,7 @@ import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getPortfolio } from "@/lib/data";
 import { listMetaAdAccounts, metaConfigured } from "@/lib/meta";
-import { compactRangeLabel, money, num } from "@/lib/format";
+import { compactRangeLabel, money, normalizeRange, num } from "@/lib/format";
 
 export default async function MetaPage({
   searchParams,
@@ -12,7 +12,7 @@ export default async function MetaPage({
   searchParams: Promise<{ range?: string }>;
 }) {
   const sp = await searchParams;
-  const range = sp.range || "30d";
+  const range = normalizeRange(sp.range);
   const data = await getPortfolio(range);
 
   let accounts: any[] = [];
