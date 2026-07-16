@@ -8,6 +8,9 @@ import { getPortfolio } from "@/lib/data";
 import { compactRangeLabel, money, normalizeRange, num, ratio } from "@/lib/format";
 import { getClientLogoMap } from "@/lib/logos";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function ClientsPage({
   searchParams,
 }: {
@@ -16,6 +19,7 @@ export default async function ClientsPage({
   const sp = await searchParams;
   const range = normalizeRange(sp.range);
   const data = await getPortfolio(range);
+  // Fresh Blob read every request so logo uploads survive refresh.
   const logos = await getClientLogoMap(data.clients.map((c) => c.client.slug));
 
   return (

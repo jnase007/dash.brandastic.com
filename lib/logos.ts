@@ -1,4 +1,5 @@
 import { list } from "@vercel/blob";
+import { unstable_noStore as noStore } from "next/cache";
 
 const PREFIX = "client-logos/";
 
@@ -7,7 +8,14 @@ export function logoPathname(slug: string, ext = "png") {
   return `${PREFIX}${safe}.${ext}`;
 }
 
+export function logoTag(slug: string) {
+  const safe = slug.replace(/[^a-z0-9-]/gi, "").toLowerCase();
+  return `logo:${safe}`;
+}
+
 export async function getClientLogoUrl(slug: string): Promise<string | null> {
+  // Never cache empty/stale logo lookups across requests.
+  noStore();
   if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
   const safe = slug.replace(/[^a-z0-9-]/gi, "").toLowerCase();
   try {
@@ -30,6 +38,8 @@ export async function getClientLogoUrl(slug: string): Promise<string | null> {
 export async function getClientLogoMap(
   slugs: string[]
 ): Promise<Record<string, string>> {
+  // Logo map must always reflect Blob, not a cached empty server render.
+  noStore();
   if (!process.env.BLOB_READ_WRITE_TOKEN) return {};
   try {
     const { blobs } = await list({

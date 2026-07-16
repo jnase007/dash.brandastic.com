@@ -1,11 +1,13 @@
 import { put } from "@vercel/blob";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 import { isAuthed } from "@/lib/auth";
 import { getClient } from "@/lib/clients";
-import { getClientLogoUrl, logoPathname } from "@/lib/logos";
+import { getClientLogoUrl, logoPathname, logoTag } from "@/lib/logos";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
@@ -96,7 +98,14 @@ export async function GET(
     const { slug } = await params;
     if (!getClient(slug)) return jsonError("Unknown client", 404);
     const url = await getClientLogoUrl(slug);
-    return NextResponse.json({ ok: true, slug, url });
+    return NextResponse.json(
+      { ok: true, slug, url },
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0, must-revalidate",
+        },
+      }
+    );
   } catch (e: any) {
     return jsonError(e?.message || "Logo lookup failed", 500);
   }
@@ -126,13 +135,27 @@ export async function POST(
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: upload.contentType,
+      cacheControlMaxAge: 60,
     });
+
+    // Bust any cached page/logo lookups so refresh keeps the new logo.
+    try {
+      revalidateTag(logoTag(slug));
+      revalidatePath("/");
+      revalidatePath("/clients");
+      revalidatePath(`/clients/${slug}`);
+      revalidatePath("/reports");
+      revalidatePath(`/reports/${slug}`);
+    } catch {
+      // best-effort; Blob write already succeeded
+    }
 
     return NextResponse.json({
       ok: true,
       slug,
       url: blob.url,
       pathname: blob.pathname,
+      cacheBust: Date.now(),
     });
   } catch (e: any) {
     const msg = e?.message || "Logo upload failed";

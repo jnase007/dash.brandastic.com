@@ -6,6 +6,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { useRouter } from "next/navigation";
 
 type CropState = {
   src: string;
@@ -33,6 +34,7 @@ export function ClientLogo({
   size?: number;
   editable?: boolean;
 }) {
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(
     null
@@ -45,6 +47,36 @@ export function ClientLogo({
   useEffect(() => {
     setUrl(logoUrl || null);
   }, [logoUrl]);
+
+  // Always re-check Blob after mount/refresh so uploads stick even if the
+  // server-rendered page had a stale empty logoUrl.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/logos/${encodeURIComponent(slug)}`, {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        const text = await res.text();
+        const json = text ? JSON.parse(text) : null;
+        if (cancelled || !json?.ok) return;
+        if (json.url) {
+          setUrl(
+            `${json.url}${json.url.includes("?") ? "&" : "?"}t=${Date.now()}`
+          );
+        } else if (!logoUrl) {
+          setUrl(null);
+        }
+      } catch {
+        // keep server-provided logoUrl if live lookup fails
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, logoUrl]);
 
   function openPicker() {
     if (!editable || busy) return;
@@ -176,8 +208,11 @@ export function ClientLogo({
         throw new Error(json?.error || `Upload failed (${res.status})`);
       }
       if (!json.url) throw new Error("Upload succeeded but no logo URL returned");
-      setUrl(`${json.url}${json.url.includes("?") ? "&" : "?"}t=${Date.now()}`);
+      const bust = json.cacheBust || Date.now();
+      setUrl(`${json.url}${json.url.includes("?") ? "&" : "?"}t=${bust}`);
       setCrop(null);
+      // Soft-refresh RSC payload so refresh/navigation keeps the saved logo.
+      router.refresh();
     } catch (e: any) {
       setErr(e?.message || "Upload failed");
     } finally {
@@ -292,7 +327,8 @@ export function ClientLogo({
             </label>
 
             <p className="muted logo-crop-help">
-              Drag to position. Zoom to fill the square. We’ll save a clean 512×512 PNG.
+              Drag to position. Zoom to fill the square. We’ll save a clean
+              512×512 PNG.
             </p>
 
             {err ? <div className="badge warn">{err}</div> : null}

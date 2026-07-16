@@ -12,6 +12,9 @@ import { compactRangeLabel, money, normalizeRange, num, pct, ratio } from "@/lib
 import { getPortfolioInsights } from "@/lib/insights";
 import { getClientLogoMap } from "@/lib/logos";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function OverviewPage({
   searchParams,
 }: {

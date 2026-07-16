@@ -10,6 +10,9 @@ import { getClientSummary } from "@/lib/data";
 import { compactRangeLabel, money, normalizeRange, num, pct, ratio } from "@/lib/format";
 import { getClientLogoUrl } from "@/lib/logos";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function ClientDetailPage({
   params,
   searchParams,
