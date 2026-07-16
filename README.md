@@ -2,11 +2,15 @@
 
 Brandastic Ads Dashboard for **team + client review** of Meta + Google Ads.
 
+Built to **replace AgencyAnalytics** for Brandastic: portfolio review, client-branded reports, and AI recommendations from campaign data.
+
 ## What it is
-- Look/feel inspired by [brandastic.co](https://brandastic.co/) (sidebar shell, Inter, blue/cyan/purple accents, card metrics)
+- Look/feel inspired by [brandastic.co](https://brandastic.co/) (login with team photos, left nav + updates, Inter, blue/cyan/purple accents)
 - Multi-client portfolio overview
 - Client detail pages with Meta vs Google split
-- Campaign table
+- **AI Insights** — data-driven recommendations (CPA, ROAS, CTR, zero-conversion spend, channel gaps)
+- **Custom client reports** — branded narrative + metrics + campaign table + next actions
+- Campaign tables
 - Date ranges: 7d / 30d / 90d
 - PIN gate for v1 access
 - **Read-only / review-only** — no ad create/edit/pause/budget changes
@@ -44,17 +48,23 @@ See `.env.example`.
 Without tokens, the UI runs in **demo mode** so team can review layout/flow immediately.
 
 ## Deploy (Vercel)
-1. Create GitHub repo (Justin)
-2. Push this folder to `main`
-3. Import project in Vercel under `nase007s-projects`
-4. Set env vars
-5. Add domain `dash.brandastic.com`
-   - Cloudflare DNS: `dash` CNAME → `cname.vercel-dns.com` **DNS only** (grey cloud), same rule as course
+1. Repo: https://github.com/jnase007/dash.brandastic.com
+2. Project: `dash-brandastic` under `nase007s-projects`
+3. Set env vars
+4. Domain `dash.brandastic.com`
+   - Cloudflare DNS: `dash` CNAME → `b5dad6a4bb9a82d2.vercel-dns-016.com` **DNS only** (grey cloud)
+   - Fallback: `cname.vercel-dns.com`
 
-Or from CLI:
-```bash
-npx vercel@latest --prod --token $VERCEL_TOKEN
-```
+Preview while DNS propagates: https://dash-brandastic.vercel.app
+
+## Roadmap vs AgencyAnalytics
+- [x] Portfolio + client dashboards
+- [x] Client-branded report pages
+- [x] AI recommendations from metrics
+- [ ] Live Meta/Google tokens + account map
+- [ ] External client magic links (no full portfolio)
+- [ ] Scheduled email/PDF report delivery
+- [ ] Deeper creative / search-term insights when API fields available
 
 ## Policy
 Meta remains **review only** for Chip/automation. Humans apply campaign changes in Ads Manager.

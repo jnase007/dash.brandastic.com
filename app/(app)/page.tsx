@@ -143,20 +143,22 @@ export default async function OverviewPage({
           </div>
 
           <div className="card">
-            <h3>What team + clients can review</h3>
+            <h3>AgencyAnalytics replacement</h3>
             <div className="pill-row" style={{ marginBottom: 12 }}>
               <span className="badge blue">Spend</span>
-              <span className="badge blue">Clicks / CTR</span>
-              <span className="badge blue">Leads / Conv.</span>
-              <span className="badge blue">CPA</span>
-              <span className="badge blue">ROAS</span>
-              <span className="badge muted">Campaign list</span>
+              <span className="badge blue">CPA / ROAS</span>
+              <span className="badge blue">AI insights</span>
+              <span className="badge blue">Client reports</span>
+              <span className="badge muted">Review only</span>
             </div>
-            <p className="muted" style={{ fontSize: 13 }}>
-              Client pages are shareable inside the team PIN gate. Next pass can
-              add per-client magic links if you want external client access
-              without the full portfolio.
+            <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
+              Use Dash for team + client campaign review, custom branded reports,
+              and AI recommendations generated from the metrics.
             </p>
+            <div className="pill-row">
+              <Link href="/insights" className="btn ghost">AI Insights</Link>
+              <Link href="/reports" className="btn ghost">Client Reports</Link>
+            </div>
           </div>
         </div>
       </div>

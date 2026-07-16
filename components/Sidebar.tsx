@@ -7,22 +7,24 @@ import { TEAM } from "@/lib/brand";
 const links = [
   { href: "/", label: "Overview", icon: "◉" },
   { href: "/clients", label: "Clients", icon: "◎" },
+  { href: "/insights", label: "AI Insights", icon: "✦" },
+  { href: "/reports", label: "Reports", icon: "☰" },
   { href: "/meta", label: "Meta Ads", icon: "◈" },
   { href: "/google", label: "Google Ads", icon: "◇" },
 ];
 
 const updates = [
   {
-    title: "Demo mode active",
-    body: "Wire Meta + Google tokens to unlock live metrics.",
+    title: "AgencyAnalytics replacement",
+    body: "Custom client reports + AI recommendations are live in Dash.",
+  },
+  {
+    title: "Demo mode until tokens",
+    body: "Connect Meta + Google to unlock live campaign data.",
   },
   {
     title: "Review only",
     body: "No campaign edits, pauses, or budget changes from Dash.",
-  },
-  {
-    title: "Client-branded views",
-    body: "Open any client page for a branded performance review.",
   },
 ];
 
