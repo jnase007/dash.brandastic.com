@@ -90,11 +90,26 @@ function parseInsightsJson(content: string): Insight[] {
     .replace(/^```\s*/i, "")
     .replace(/\s*```$/i, "")
     .trim();
-  const start = cleaned.indexOf("[");
-  const end = cleaned.lastIndexOf("]");
-  if (start < 0 || end < 0) throw new Error("No JSON array in xAI response");
-  const arr = JSON.parse(cleaned.slice(start, end + 1));
-  if (!Array.isArray(arr)) throw new Error("xAI response was not an array");
+
+  let arr: any[] | null = null;
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) arr = parsed;
+    else if (Array.isArray(parsed?.insights)) arr = parsed.insights;
+    else if (Array.isArray(parsed?.recommendations)) arr = parsed.recommendations;
+    else if (Array.isArray(parsed?.items)) arr = parsed.items;
+  } catch {
+    // fall through to bracket extraction
+  }
+
+  if (!arr) {
+    const start = cleaned.indexOf("[");
+    const end = cleaned.lastIndexOf("]");
+    if (start < 0 || end < 0) throw new Error("No JSON array in xAI response");
+    const parsed = JSON.parse(cleaned.slice(start, end + 1));
+    if (!Array.isArray(parsed)) throw new Error("xAI response was not an array");
+    arr = parsed;
+  }
 
   return arr
     .map((row: any, idx: number): Insight | null => {
@@ -144,9 +159,9 @@ Rules:
 - Prioritize high-impact issues: high CPA, low ROAS, zero-conversion spend, creative fatigue signals, channel imbalance, tracking gaps.
 - Include 1–3 positive wins when data supports them.
 - Keep language executive-ready for agency + client reviews.
-- Output ONLY a JSON array (no markdown, no prose outside JSON).
+- Respond as a JSON object: { "insights": [ ... ] } with 8–16 items sorted high → medium → low → positive.
 
-Each item schema:
+Each insight object schema:
 {
   "id": "string-stable-id",
   "clientSlug": "optional-slug",
@@ -157,9 +172,7 @@ Each item schema:
   "body": "1-2 sentence diagnosis with numbers",
   "recommendation": "specific next action for humans",
   "metricHint": "short metric label like CPA $82"
-}
-
-Return 8–16 insights sorted by priority (high first, then medium, low, positive).`;
+}`;
 
   const user = `Analyze this portfolio snapshot for range ${portfolio.range}.
 
@@ -170,7 +183,7 @@ RULE_BASED_SEED_FLAGS:
 ${JSON.stringify(seed)}
 
 Write better AI insights grounded in the metrics. Use seed flags as hints, not as copy to rewrite blindly.
-Format spend with dollars only in prose, not inventing data that is not present.`;
+Do not invent metrics that are not present. Return JSON object with key "insights".`;
 
   const res = await fetch(`${XAI_BASE}/chat/completions`, {
     method: "POST",
@@ -180,8 +193,9 @@ Format spend with dollars only in prose, not inventing data that is not present.
     },
     body: JSON.stringify({
       model: XAI_MODEL,
-      temperature: 0.3,
-      max_tokens: 2500,
+      temperature: 0.25,
+      max_tokens: 3200,
+      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
