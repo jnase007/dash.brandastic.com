@@ -6,6 +6,8 @@ import { datePreset } from "./format";
  * Uses REST searchStream once developer token + OAuth refresh are present.
  * Without credentials, callers should fall back to demo mode.
  */
+const GOOGLE_ADS_API_VERSION = process.env.GOOGLE_ADS_API_VERSION || "v21";
+
 export function googleConfigured() {
   return Boolean(
     process.env.GOOGLE_ADS_DEVELOPER_TOKEN &&
@@ -63,7 +65,7 @@ export async function fetchGoogleCustomerInsights(customerId: string, range: str
   `;
 
   const res = await fetch(
-    `https://googleads.googleapis.com/v17/customers/${cid}/googleAds:searchStream`,
+    `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${cid}/googleAds:searchStream`,
     {
       method: "POST",
       headers: {
@@ -154,4 +156,87 @@ export async function fetchGoogleCustomerInsights(customerId: string, range: str
   };
 
   return { metrics, campaigns: Array.from(byCampaign.values()) };
+}
+
+/** READ ONLY: list Google Ads customer IDs visible to the OAuth user. */
+export async function listGoogleAccessibleCustomers() {
+  if (!googleConfigured()) throw new Error("Google Ads not configured");
+  const accessToken = await getAccessToken();
+  const res = await fetch(
+    `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers:listAccessibleCustomers`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "",
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    }
+  );
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error?.message || `Google Ads API ${res.status}`);
+  }
+  return (json.resourceNames || []).map((rn: string) =>
+    String(rn).replace("customers/", "")
+  );
+}
+
+/** READ ONLY: list client accounts under an MCC. */
+export async function listGoogleMccClients(mccId?: string) {
+  if (!googleConfigured()) throw new Error("Google Ads not configured");
+  const accessToken = await getAccessToken();
+  const mcc = normalizeCustomerId(
+    mccId || process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID || ""
+  );
+  if (!mcc) throw new Error("GOOGLE_ADS_LOGIN_CUSTOMER_ID missing");
+
+  const query = `
+    SELECT
+      customer_client.client_customer,
+      customer_client.descriptive_name,
+      customer_client.id,
+      customer_client.level,
+      customer_client.manager,
+      customer_client.status
+    FROM customer_client
+    WHERE customer_client.level <= 1
+  `;
+
+  const res = await fetch(
+    `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${mcc}/googleAds:searchStream`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "",
+        "login-customer-id": mcc,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query }),
+      cache: "no-store",
+    }
+  );
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error?.message || `Google Ads API ${res.status}`);
+  }
+
+  const rows: any[] = [];
+  const batches = Array.isArray(json) ? json : [json];
+  for (const batch of batches) {
+    for (const r of batch.results || []) rows.push(r);
+  }
+
+  return rows.map((r) => {
+    const cc = r.customerClient || {};
+    return {
+      id: String(cc.id || ""),
+      name: cc.descriptiveName || "",
+      manager: Boolean(cc.manager),
+      status: cc.status || "UNKNOWN",
+      resource: cc.clientCustomer || "",
+    };
+  });
 }
