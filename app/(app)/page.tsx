@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { MetricCard } from "@/components/MetricCard";
 import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
+import { clientBrand } from "@/lib/brand";
 import { getPortfolio } from "@/lib/data";
 import { compactRangeLabel, money, num, pct, ratio } from "@/lib/format";
 
@@ -30,6 +31,23 @@ export default async function OverviewPage({
           <Suspense fallback={null}>
             <RangeSelect value={range} />
           </Suspense>
+        </div>
+      </div>
+
+      <div className="home-hero">
+        <div className="home-hero-card">
+          <img src="/team/office-1.png" alt="Brandastic team" />
+          <div className="home-hero-overlay">
+            <strong>Brandastic team workspace</strong>
+            <span>Left-nav updates · client-branded reviews · Meta + Google</span>
+          </div>
+        </div>
+        <div className="home-hero-card">
+          <img src="/team/justin-portrait.webp" alt="Justin Nase" />
+          <div className="home-hero-overlay">
+            <strong>Review-only access</strong>
+            <span>No campaign edits from this dashboard</span>
+          </div>
         </div>
       </div>
 
@@ -71,24 +89,35 @@ export default async function OverviewPage({
               View all
             </Link>
           </div>
-          {data.clients.map((c) => (
-            <Link key={c.client.id} href={`/clients/${c.client.slug}`} className="client-row">
-              <div>
-                <div className="client-name">{c.client.name}</div>
-                <div className="client-meta">
-                  {c.client.industry || "Client"} · {c.source}
+          {data.clients.map((c) => {
+            const brand = clientBrand(c.client.slug);
+            return (
+              <Link key={c.client.id} href={`/clients/${c.client.slug}`} className="client-row">
+                <div className="client-row-left">
+                  <div
+                    className="client-avatar"
+                    style={{ background: brand.accent }}
+                  >
+                    {brand.monogram}
+                  </div>
+                  <div>
+                    <div className="client-name">{c.client.name}</div>
+                    <div className="client-meta">
+                      {c.client.industry || "Client"} · {c.source}
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div className="mono" style={{ fontWeight: 800 }}>
-                  {money(c.combined.spend)}
+                <div style={{ textAlign: "right" }}>
+                  <div className="mono" style={{ fontWeight: 800 }}>
+                    {money(c.combined.spend)}
+                  </div>
+                  <div className="client-meta">
+                    CPA {money(c.combined.cpa)} · ROAS {ratio(c.combined.roas)}
+                  </div>
                 </div>
-                <div className="client-meta">
-                  CPA {money(c.combined.cpa)} · ROAS {ratio(c.combined.roas)}
-                </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </div>
 
         <div className="grid" style={{ gap: 16 }}>

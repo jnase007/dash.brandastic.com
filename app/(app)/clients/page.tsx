@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
+import { clientBrand } from "@/lib/brand";
 import { getPortfolio } from "@/lib/data";
 import { compactRangeLabel, money, num, ratio } from "@/lib/format";
 
@@ -42,11 +43,20 @@ export default async function ClientsPage({
             </tr>
           </thead>
           <tbody>
-            {data.clients.map((c) => (
+            {data.clients.map((c) => {
+              const brand = clientBrand(c.client.slug);
+              return (
               <tr key={c.client.id}>
                 <td>
-                  <div className="client-name">{c.client.name}</div>
-                  <div className="client-meta">{c.client.industry}</div>
+                  <div className="client-row-left">
+                    <div className="client-avatar" style={{ background: brand.accent }}>
+                      {brand.monogram}
+                    </div>
+                    <div>
+                      <div className="client-name">{c.client.name}</div>
+                      <div className="client-meta">{c.client.industry}</div>
+                    </div>
+                  </div>
                 </td>
                 <td>
                   <StatusBadge status={c.client.status === "setup" ? "missing" : c.source} />
@@ -61,7 +71,7 @@ export default async function ClientsPage({
                   </Link>
                 </td>
               </tr>
-            ))}
+            );})}
           </tbody>
         </table>
       </div>

@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { ClientBrandHeader } from "@/components/ClientBrandHeader";
 import { MetricCard } from "@/components/MetricCard";
 import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -26,14 +26,13 @@ export default async function ClientDetailPage({
   return (
     <div>
       <div className="topbar">
-        <div>
-          <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
-            <Link href="/clients">Clients</Link> / {data.client.name}
-          </div>
-          <h1>{data.client.name}</h1>
-          <p>
-            {data.client.industry || "Client"} · {compactRangeLabel(range)}
-          </p>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <ClientBrandHeader
+            name={data.client.name}
+            slug={data.client.slug}
+            industry={data.client.industry}
+            rangeLabel={compactRangeLabel(range)}
+          />
         </div>
         <div className="top-actions">
           <StatusBadge status={data.source} />

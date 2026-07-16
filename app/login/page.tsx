@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { COOKIE, isAuthed, sessionCookieValue } from "@/lib/auth";
+import { TEAM } from "@/lib/brand";
 
 async function loginAction(formData: FormData) {
   "use server";
@@ -29,36 +30,96 @@ export default async function LoginPage({
   const sp = await searchParams;
 
   return (
-    <div className="login-wrap">
-      <div className="login-card">
-        <div className="brand-mark" style={{ width: 42, height: 42 }}>
-          B
-        </div>
-        <h1>Brandastic Ads Dash</h1>
-        <p>
-          Review Meta + Google Ads performance for the team and clients. Access
-          is PIN-gated for v1.
-        </p>
-        <form action={loginAction} className="stack">
-          <input
-            className="input"
-            type="password"
-            name="pin"
-            placeholder="Access PIN"
-            required
+    <div className="login-shell">
+      <section className="login-visual">
+        <div className="login-visual-inner">
+          <img
+            src="/brand/logo-export.svg"
+            alt="Brandastic"
+            className="login-logo-light"
           />
-          {sp.error ? (
-            <div className="badge warn">Incorrect PIN</div>
-          ) : (
-            <div className="muted" style={{ fontSize: 12 }}>
-              Default team PIN can be changed via DASH_ACCESS_PIN.
+          <div className="login-kicker">Team + client ads review</div>
+          <h1 className="login-visual-title">
+            Review Meta + Google performance
+            <span> the Brandastic way.</span>
+          </h1>
+          <p className="login-visual-copy">
+            One place for spend, leads, CPA, and ROAS — with left-nav updates,
+            client-branded views, and review-only access. No campaign edits from
+            this app.
+          </p>
+
+          <div className="login-photo-grid">
+            <div className="login-photo large">
+              <img src="/team/office-1.png" alt="Brandastic team" />
             </div>
-          )}
-          <button className="btn primary" type="submit">
-            Enter dashboard
-          </button>
-        </form>
-      </div>
+            <div className="login-photo">
+              <img src="/team/justin-portrait.webp" alt="Justin Nase" />
+            </div>
+            <div className="login-photo">
+              <img src="/team/office-2.png" alt="Brandastic office" />
+            </div>
+          </div>
+
+          <div className="login-team-row">
+            {TEAM.map((m) => (
+              <div key={m.name} className="login-team-chip">
+                <img src={m.image} alt={m.name} />
+                <div>
+                  <strong>{m.name}</strong>
+                  <span>{m.role}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="login-panel">
+        <div className="login-card brandastic">
+          <img
+            src="/brand/logo-black.png"
+            alt="Brandastic"
+            className="login-logo-dark"
+          />
+          <div className="login-badge">dash.brandastic.com</div>
+          <h2>Welcome back</h2>
+          <p>
+            Enter the team PIN to open Ads Dash — Meta + Google review for
+            Brandastic and our clients.
+          </p>
+
+          <form action={loginAction} className="stack">
+            <label className="field-label" htmlFor="pin">
+              Access PIN
+            </label>
+            <input
+              id="pin"
+              className="input"
+              type="password"
+              name="pin"
+              placeholder="••••"
+              required
+              autoFocus
+            />
+            {sp.error ? (
+              <div className="badge warn">Incorrect PIN — try again</div>
+            ) : (
+              <div className="muted" style={{ fontSize: 12 }}>
+                Team access only. Default PIN can be rotated via{" "}
+                <code>DASH_ACCESS_PIN</code>.
+              </div>
+            )}
+            <button className="btn primary wide" type="submit">
+              Enter Ads Dash
+            </button>
+          </form>
+
+          <div className="login-foot">
+            Review-only · No budgets, ads, or audiences can be changed here
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

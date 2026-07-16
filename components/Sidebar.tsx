@@ -2,21 +2,37 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { TEAM } from "@/lib/brand";
 
 const links = [
-  { href: "/", label: "Overview" },
-  { href: "/clients", label: "Clients" },
-  { href: "/meta", label: "Meta Ads" },
-  { href: "/google", label: "Google Ads" },
+  { href: "/", label: "Overview", icon: "◉" },
+  { href: "/clients", label: "Clients", icon: "◎" },
+  { href: "/meta", label: "Meta Ads", icon: "◈" },
+  { href: "/google", label: "Google Ads", icon: "◇" },
+];
+
+const updates = [
+  {
+    title: "Demo mode active",
+    body: "Wire Meta + Google tokens to unlock live metrics.",
+  },
+  {
+    title: "Review only",
+    body: "No campaign edits, pauses, or budget changes from Dash.",
+  },
+  {
+    title: "Client-branded views",
+    body: "Open any client page for a branded performance review.",
+  },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar light">
       <div className="brand">
-        <div className="brand-mark">B</div>
+        <img src="/brand/logo-black.png" alt="Brandastic" className="brand-logo" />
         <div>
           <strong>Brandastic</strong>
           <span>Ads Dash</span>
@@ -31,17 +47,38 @@ export function Sidebar() {
               : pathname === l.href || pathname.startsWith(l.href + "/");
           return (
             <Link key={l.href} href={l.href} className={active ? "active" : ""}>
+              <span className="nav-icon">{l.icon}</span>
               {l.label}
             </Link>
           );
         })}
       </nav>
 
-      <div className="nav-label">Access</div>
+      <div className="nav-label">Updates</div>
+      <div className="updates">
+        {updates.map((u) => (
+          <div key={u.title} className="update-card">
+            <strong>{u.title}</strong>
+            <span>{u.body}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="nav-label">Team</div>
+      <div className="team-stack">
+        {TEAM.slice(0, 4).map((m) => (
+          <div key={m.name} className="team-mini">
+            <img src={m.image} alt={m.name} />
+            <div>
+              <strong>{m.name}</strong>
+              <span>{m.role}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div className="sidebar-foot">
-        Review-only dashboard for Meta + Google Ads.
-        <br />
-        No campaign edits from this app.
+        Review-only Meta + Google dashboard for the Brandastic team and clients.
       </div>
     </aside>
   );
