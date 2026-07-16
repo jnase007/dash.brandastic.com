@@ -5,7 +5,7 @@ import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getPortfolio } from "@/lib/data";
 import { compactRangeLabel } from "@/lib/format";
-import { buildPortfolioInsights } from "@/lib/insights";
+import { getPortfolioInsights } from "@/lib/insights";
 
 export default async function InsightsPage({
   searchParams,
@@ -15,7 +15,8 @@ export default async function InsightsPage({
   const sp = await searchParams;
   const range = sp.range || "30d";
   const data = await getPortfolio(range);
-  const insights = buildPortfolioInsights(data).slice(0, 24);
+  const ai = await getPortfolioInsights(data, { limit: 24 });
+  const insights = ai.insights;
 
   return (
     <div>
@@ -23,12 +24,16 @@ export default async function InsightsPage({
         <div>
           <h1>AI Recommendations</h1>
           <p>
-            Data-driven flags and next actions across Meta + Google ·{" "}
-            {compactRangeLabel(range)}
+            {ai.engine === "xai"
+              ? `xAI Grok insights across Meta + Google · ${compactRangeLabel(range)}`
+              : `Rule-based insights across Meta + Google · ${compactRangeLabel(range)}`}
           </p>
         </div>
         <div className="top-actions">
           <StatusBadge status={data.mode} />
+          <span className={`badge ${ai.engine === "xai" ? "blue" : "muted"}`}>
+            {ai.engine === "xai" ? `xAI · ${ai.model || "grok"}` : "rules"}
+          </span>
           <Suspense fallback={null}>
             <RangeSelect value={range} />
           </Suspense>
@@ -36,11 +41,15 @@ export default async function InsightsPage({
       </div>
 
       <div className="notice">
-        <strong>AgencyAnalytics replacement path.</strong> These recommendations
-        are generated from live/demo metrics already in Dash (CPA, ROAS, CTR,
-        zero-conversion spend, channel gaps). Review-only — humans apply changes
-        in Ads Manager / Google Ads. Custom client reports live under{" "}
-        <Link href="/reports">Reports</Link>.
+        <strong>
+          {ai.engine === "xai"
+            ? "Powered by xAI API."
+            : "Rule engine fallback."}
+        </strong>{" "}
+        {ai.note ||
+          "Recommendations are generated from live/demo metrics already in Dash."}{" "}
+        Review-only — humans apply changes in Ads Manager / Google Ads. Custom
+        client reports live under <Link href="/reports">Reports</Link>.
       </div>
 
       <div className="card">

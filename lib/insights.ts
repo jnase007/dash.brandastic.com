@@ -1,5 +1,6 @@
 import type { ClientSummary, MetricSet, PortfolioSummary } from "./types";
 import { money, pct, ratio } from "./format";
+import { generateXaiPortfolioInsights, xaiConfigured } from "./xai";
 
 export type InsightSeverity = "high" | "medium" | "low" | "positive";
 
@@ -289,4 +290,68 @@ export function buildClientReportNarrative(summary: ClientSummary): {
     );
   }
   return { headline, summary: summaryText, bullets, nextActions };
+}
+
+export type InsightEngineResult = {
+  insights: Insight[];
+  engine: "xai" | "rules";
+  model?: string;
+  note?: string;
+};
+
+/**
+ * Preferred insights path: xAI Grok when XAI_API_KEY is present,
+ * otherwise deterministic rule engine (always available fallback).
+ */
+export async function getPortfolioInsights(
+  portfolio: PortfolioSummary,
+  opts: { limit?: number } = {}
+): Promise<InsightEngineResult> {
+  const limit = opts.limit ?? 24;
+  const rules = buildPortfolioInsights(portfolio);
+
+  if (!xaiConfigured()) {
+    return {
+      insights: rules.slice(0, limit),
+      engine: "rules",
+      note: "Rule engine active. Add XAI_API_KEY for Grok-powered recommendations.",
+    };
+  }
+
+  try {
+    const ai = await generateXaiPortfolioInsights(portfolio, rules);
+    // Keep a couple of hard rule flags if AI omitted critical setup issues
+    const criticalRules = rules
+      .filter(
+        (r) =>
+          r.severity === "high" &&
+          (r.id.includes("setup") ||
+            r.id.includes("connection") ||
+            r.id.includes("no-spend") ||
+            r.title.toLowerCase().includes("zero-conversion"))
+      )
+      .slice(0, 4);
+
+    const merged: Insight[] = [];
+    const seen = new Set<string>();
+    for (const item of [...ai.insights, ...criticalRules]) {
+      const key = `${item.clientSlug || "p"}|${item.title}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(item);
+    }
+
+    return {
+      insights: merged.slice(0, limit),
+      engine: "xai",
+      model: ai.model,
+      note: "Powered by xAI Grok · review-only recommendations",
+    };
+  } catch (e: any) {
+    return {
+      insights: rules.slice(0, limit),
+      engine: "rules",
+      note: `xAI unavailable (${e?.message || "error"}) · showing rule-based insights`,
+    };
+  }
 }

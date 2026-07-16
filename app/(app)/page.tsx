@@ -8,7 +8,7 @@ import { clientBrand } from "@/lib/brand";
 import { metricDeltas, previousMetrics } from "@/lib/compare";
 import { getPortfolio } from "@/lib/data";
 import { compactRangeLabel, money, num, pct, ratio } from "@/lib/format";
-import { buildPortfolioInsights } from "@/lib/insights";
+import { getPortfolioInsights } from "@/lib/insights";
 
 export default async function OverviewPage({
   searchParams,
@@ -20,7 +20,8 @@ export default async function OverviewPage({
   const data = await getPortfolio(range);
   const prev = previousMetrics(data.totals, 3);
   const deltas = metricDeltas(data.totals, prev);
-  const insights = buildPortfolioInsights(data);
+  const ai = await getPortfolioInsights(data, { limit: 20 });
+  const insights = ai.insights;
   const priority = insights.filter((i) => i.severity === "high" || i.severity === "medium").slice(0, 6);
   const wins = insights.filter((i) => i.severity === "positive").slice(0, 3);
 
@@ -173,7 +174,9 @@ export default async function OverviewPage({
         <div className="card premium-panel">
           <div className="panel-head">
             <div>
-              <div className="eyebrow">Needs attention</div>
+              <div className="eyebrow">
+                Needs attention · {ai.engine === "xai" ? "xAI Grok" : "rules"}
+              </div>
               <h3>Priority inbox</h3>
             </div>
             <Link href="/insights" className="btn ghost">
