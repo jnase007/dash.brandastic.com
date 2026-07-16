@@ -60,18 +60,28 @@ export async function POST(
           : "jpg";
 
   const pathname = logoPathname(slug, ext);
-  const blob = await put(pathname, file, {
-    access: "public",
-    token: process.env.BLOB_READ_WRITE_TOKEN,
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: file.type,
-  });
+  try {
+    const blob = await put(pathname, file, {
+      access: "public",
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: file.type,
+    });
 
-  return NextResponse.json({
-    ok: true,
-    slug,
-    url: blob.url,
-    pathname: blob.pathname,
-  });
+    return NextResponse.json({
+      ok: true,
+      slug,
+      url: blob.url,
+      pathname: blob.pathname,
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: e?.message || "Logo upload failed",
+      },
+      { status: 500 }
+    );
+  }
 }

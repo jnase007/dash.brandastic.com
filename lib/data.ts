@@ -91,10 +91,14 @@ export async function getClientSummary(
       google = res.metrics;
       googleCampaigns = res.campaigns;
     } catch (e: any) {
+      // Google can be "configured" (OAuth present) but still blocked by
+      // developer-token/project mismatch — keep Meta live and surface note.
       notes.push(`Google: ${e.message || "error"}`);
     }
-  } else if (!client.googleCustomerId) {
+  } else if (googleConfigured() && !client.googleCustomerId) {
     notes.push("Google Ads customer ID not mapped yet.");
+  } else if (!googleConfigured()) {
+    notes.push("Google Ads not fully connected yet.");
   }
 
   const source =
