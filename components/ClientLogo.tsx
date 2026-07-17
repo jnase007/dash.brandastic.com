@@ -17,6 +17,27 @@ type CropState = {
   offsetY: number;
 };
 
+const LS_PREFIX = "dash.logo.";
+
+function readLocalLogo(slug: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(LS_PREFIX + slug);
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalLogo(slug: string, url: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (url) window.localStorage.setItem(LS_PREFIX + slug, url);
+    else window.localStorage.removeItem(LS_PREFIX + slug);
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
 export function ClientLogo({
   slug,
   name,
@@ -45,8 +66,11 @@ export function ClientLogo({
   const [crop, setCrop] = useState<CropState | null>(null);
 
   useEffect(() => {
-    setUrl(logoUrl || null);
-  }, [logoUrl]);
+    // Prefer server/Blob URL; fall back to local sticky copy so refresh keeps logo
+    // even if SSR was stale.
+    const local = readLocalLogo(slug);
+    setUrl(logoUrl || local || null);
+  }, [logoUrl, slug]);
 
   // Always re-check Blob after mount/refresh so uploads stick even if the
   // server-rendered page had a stale empty logoUrl.
@@ -63,14 +87,20 @@ export function ClientLogo({
         const json = text ? JSON.parse(text) : null;
         if (cancelled || !json?.ok) return;
         if (json.url) {
-          setUrl(
-            `${json.url}${json.url.includes("?") ? "&" : "?"}t=${Date.now()}`
-          );
+          const next = `${json.url}${json.url.includes("?") ? "&" : "?"}t=${Date.now()}`;
+          setUrl(next);
+          // Store the clean Blob URL (no bust query) for sticky reloads.
+          writeLocalLogo(slug, json.url);
         } else if (!logoUrl) {
-          setUrl(null);
+          // Keep local sticky logo if API has not caught up yet.
+          const local = readLocalLogo(slug);
+          if (local) setUrl(local);
+          else setUrl(null);
         }
       } catch {
-        // keep server-provided logoUrl if live lookup fails
+        // keep server/local logo if live lookup fails
+        const local = readLocalLogo(slug);
+        if (!logoUrl && local) setUrl(local);
       }
     })();
     return () => {
@@ -210,6 +240,7 @@ export function ClientLogo({
       if (!json.url) throw new Error("Upload succeeded but no logo URL returned");
       const bust = json.cacheBust || Date.now();
       setUrl(`${json.url}${json.url.includes("?") ? "&" : "?"}t=${bust}`);
+      writeLocalLogo(slug, json.url);
       setCrop(null);
       // Soft-refresh RSC payload so refresh/navigation keeps the saved logo.
       router.refresh();
