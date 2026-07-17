@@ -244,20 +244,29 @@ function extractCopy(creative: any) {
   };
 }
 
+/** Prefer Meta date_preset when it matches Ads Manager; else explicit time_range. */
+function metaTimeParams(range: string): Record<string, string> {
+  const { since, until, metaDatePreset } = datePreset(range);
+  if (metaDatePreset) {
+    return { date_preset: metaDatePreset };
+  }
+  return { time_range: JSON.stringify({ since, until }) };
+}
+
 /** READ ONLY insights for one ad account. */
 export async function fetchMetaAccountInsights(accountId: string, range: string) {
   const act = accountId.startsWith("act_") ? accountId : `act_${accountId}`;
-  const { since, until } = datePreset(range);
+  const timeParams = metaTimeParams(range);
 
   const account = await graph(`/${act}/insights`, {
     fields: "spend,impressions,clicks,ctr,cpc,actions,action_values",
-    time_range: JSON.stringify({ since, until }),
+    ...timeParams,
     level: "account",
   });
 
   const campaigns = await graph(`/${act}/insights`, {
     fields: "campaign_id,campaign_name,spend,impressions,clicks,ctr,cpc,actions,action_values",
-    time_range: JSON.stringify({ since, until }),
+    ...timeParams,
     level: "campaign",
     limit: "50",
   });
@@ -285,13 +294,13 @@ export async function fetchMetaCampaignDetail(opts: {
   const act = opts.accountId.startsWith("act_")
     ? opts.accountId
     : `act_${opts.accountId}`;
-  const { since, until } = datePreset(opts.range);
+  const timeParams = metaTimeParams(opts.range);
   const notes: string[] = [];
 
   const campaignInsights = await graph(`/${act}/insights`, {
     fields:
       "campaign_id,campaign_name,spend,impressions,clicks,ctr,cpc,actions,action_values",
-    time_range: JSON.stringify({ since, until }),
+    ...timeParams,
     level: "campaign",
     filtering: JSON.stringify([
       { field: "campaign.id", operator: "EQUAL", value: opts.campaignId },
@@ -330,7 +339,7 @@ export async function fetchMetaCampaignDetail(opts: {
   const adInsights = await graph(`/${act}/insights`, {
     fields:
       "ad_id,ad_name,spend,impressions,clicks,ctr,cpc,actions,action_values",
-    time_range: JSON.stringify({ since, until }),
+    ...timeParams,
     level: "ad",
     filtering: JSON.stringify([
       { field: "campaign.id", operator: "EQUAL", value: opts.campaignId },

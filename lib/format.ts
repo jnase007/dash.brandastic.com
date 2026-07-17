@@ -25,14 +25,43 @@ export function ratio(n: number | null | undefined) {
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const CUSTOM_RANGE = /^(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})$/;
 
+/** Dashboard reporting timezone — match Ads Manager / Brandastic ops default. */
+export function dashTimezone() {
+  return process.env.DASH_TIMEZONE || "America/Los_Angeles";
+}
+
+/** YYYY-MM-DD for a Date in a specific IANA timezone (not UTC-shifted). */
+export function toIsoDateInTz(d: Date, timeZone = dashTimezone()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
 function toIsoDate(d: Date) {
-  return d.toISOString().slice(0, 10);
+  // Prefer LA/reporting TZ so evening PST does not roll the calendar day to UTC tomorrow.
+  return toIsoDateInTz(d);
 }
 
 function parseIsoDate(value: string) {
   if (!ISO_DATE.test(value)) return null;
   const d = new Date(`${value}T12:00:00Z`);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Add whole days to an ISO date string (noon UTC anchor avoids DST edge cases). */
+function addIsoDays(iso: string, days: number) {
+  const d = parseIsoDate(iso);
+  if (!d) return iso;
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Today in reporting TZ as YYYY-MM-DD. */
+export function todayInDashTz() {
+  return toIsoDateInTz(new Date());
 }
 
 export function isCustomRange(range: string) {
@@ -88,6 +117,15 @@ export function compactRangeLabel(range: string) {
   return value;
 }
 
+/**
+ * Date windows for Meta + Google.
+ *
+ * Presets match Ads Manager defaults:
+ * - Meta `last_Nd` ends YESTERDAY (excludes today)
+ * - Google `LAST_N_DAYS` ends YESTERDAY (excludes today)
+ *
+ * Custom ranges stay inclusive as selected.
+ */
 export function datePreset(range: string) {
   const value = normalizeRange(range);
   const custom = parseCustomRange(value);
@@ -99,11 +137,17 @@ export function datePreset(range: string) {
         1,
         Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
       );
-    return { since: custom.since, until: custom.until, days };
+    return {
+      since: custom.since,
+      until: custom.until,
+      days,
+      preset: null as string | null,
+      googleDuring: null as string | null,
+      metaDatePreset: null as string | null,
+      endsOn: "custom" as const,
+    };
   }
 
-  const end = new Date();
-  const start = new Date();
   const days =
     value === "7d"
       ? 7
@@ -114,6 +158,39 @@ export function datePreset(range: string) {
           : value === "90d"
             ? 90
             : 30;
-  start.setDate(end.getDate() - (days - 1));
-  return { since: toIsoDate(start), until: toIsoDate(end), days };
+
+  // Ads Manager-style: complete days ending yesterday in reporting TZ.
+  const until = addIsoDays(todayInDashTz(), -1);
+  const since = addIsoDays(until, -(days - 1));
+
+  // Google DURING presets only exist for common N; 14d falls back to BETWEEN.
+  const googleDuring =
+    days === 7
+      ? "LAST_7_DAYS"
+      : days === 30
+        ? "LAST_30_DAYS"
+        : days === 14
+          ? null
+          : null;
+
+  // Meta date_preset for last_Nd (ends yesterday). No first-class 14/60/90 in all versions;
+  // use last_7d / last_30d / last_90d when available, else custom time_range.
+  const metaDatePreset =
+    days === 7
+      ? "last_7d"
+      : days === 30
+        ? "last_30d"
+        : days === 90
+          ? "last_90d"
+          : null;
+
+  return {
+    since,
+    until,
+    days,
+    preset: value,
+    googleDuring,
+    metaDatePreset,
+    endsOn: "yesterday" as const,
+  };
 }

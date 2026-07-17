@@ -53,11 +53,17 @@ function normalizeCustomerId(id: string) {
 export async function fetchGoogleCustomerInsights(customerId: string, range: string) {
   if (!googleConfigured()) throw new Error("Google Ads not configured");
   const accessToken = await getAccessToken();
-  const { since, until } = datePreset(range);
+  const { since, until, googleDuring } = datePreset(range);
   const cid = normalizeCustomerId(customerId);
   const loginCid = normalizeCustomerId(
     process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID || customerId
   );
+
+  // Prefer Google DURING presets (LAST_7_DAYS / LAST_30_DAYS) so dash matches Ads Manager.
+  // Custom / 14d / 60d / 90d use explicit BETWEEN on complete reporting-TZ days.
+  const dateClause = googleDuring
+    ? `segments.date DURING ${googleDuring}`
+    : `segments.date BETWEEN '${since}' AND '${until}'`;
 
   const query = `
     SELECT
@@ -70,7 +76,7 @@ export async function fetchGoogleCustomerInsights(customerId: string, range: str
       metrics.conversions,
       metrics.conversions_value
     FROM campaign
-    WHERE segments.date BETWEEN '${since}' AND '${until}'
+    WHERE ${dateClause}
       AND campaign.status != 'REMOVED'
   `;
 
@@ -101,8 +107,12 @@ export async function fetchGoogleCustomerInsights(customerId: string, range: str
     for (const r of batch.results || []) rows.push(r);
   }
 
-  // Aggregate by campaign
-  const byCampaign = new Map<string, CampaignRow>();
+  // Aggregate by campaign. searchStream returns one row per campaign×day when
+  // segments.date is in the query — sum cost/value first, then derive ratios.
+  const byCampaign = new Map<
+    string,
+    CampaignRow & { _convValue: number }
+  >();
   let spend = 0;
   let impressions = 0;
   let clicks = 0;
@@ -135,11 +145,12 @@ export async function fetchGoogleCustomerInsights(customerId: string, range: str
           impressions: imps,
           clicks: cl,
           conversions: conv,
-          ctr: imps ? cl / imps : 0,
-          cpc: cl ? cost / cl : null,
-          cpa: conv ? cost / conv : null,
-          roas: cost ? value / cost : null,
+          ctr: 0,
+          cpc: null,
+          cpa: null,
+          roas: null,
         },
+        _convValue: value,
       });
     } else {
       const m = existing.metrics;
@@ -147,11 +158,17 @@ export async function fetchGoogleCustomerInsights(customerId: string, range: str
       m.impressions += imps;
       m.clicks += cl;
       m.conversions += conv;
-      m.ctr = m.impressions ? m.clicks / m.impressions : 0;
-      m.cpc = m.clicks ? m.spend / m.clicks : null;
-      m.cpa = m.conversions ? m.spend / m.conversions : null;
-      m.roas = m.spend ? ((m.roas || 0) * (m.spend - cost) + value) / m.spend : null;
+      existing._convValue += value;
     }
+  }
+
+  for (const row of byCampaign.values()) {
+    const m = row.metrics;
+    m.ctr = m.impressions ? m.clicks / m.impressions : 0;
+    m.cpc = m.clicks ? m.spend / m.clicks : null;
+    m.cpa = m.conversions ? m.spend / m.conversions : null;
+    m.roas = m.spend ? row._convValue / m.spend : null;
+    delete (row as { _convValue?: number })._convValue;
   }
 
   const metrics: MetricSet = {
@@ -165,7 +182,11 @@ export async function fetchGoogleCustomerInsights(customerId: string, range: str
     roas: spend ? convValue / spend : null,
   };
 
-  return { metrics, campaigns: Array.from(byCampaign.values()) };
+  const campaigns: CampaignRow[] = Array.from(byCampaign.values()).map(
+    ({ _convValue, ...rest }) => rest as CampaignRow
+  );
+
+  return { metrics, campaigns };
 }
 
 /** READ ONLY: list Google Ads customer IDs visible to the OAuth user. */
