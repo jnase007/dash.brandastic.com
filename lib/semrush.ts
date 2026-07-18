@@ -95,9 +95,22 @@ function parseCsv(text: string): { headers: string[]; rows: string[][] } {
 function rowMap(headers: string[], row: string[]) {
   const out: Record<string, string> = {};
   headers.forEach((h, i) => {
-    out[h] = row[i] ?? "";
+    const value = row[i] ?? "";
+    out[h] = value;
+    // also index by lowercase for resilient lookups
+    out[h.toLowerCase()] = value;
   });
   return out;
+}
+
+/** Semrush returns full header labels, not short codes. */
+function pick(m: Record<string, string>, ...keys: string[]) {
+  for (const key of keys) {
+    if (m[key] != null && m[key] !== "") return m[key];
+    const lower = key.toLowerCase();
+    if (m[lower] != null && m[lower] !== "") return m[lower];
+  }
+  return "";
 }
 
 async function semrushGet(params: Record<string, string>) {
@@ -129,15 +142,15 @@ export async function fetchDomainOverview(
   const { headers, rows } = parseCsv(text);
   const first = rows[0] ? rowMap(headers, rows[0]) : {};
   return {
-    domain: first.Dn || domain,
+    domain: pick(first, "Domain", "Dn") || domain,
     database,
-    rank: parseNumber(first.Rk),
-    organicKeywords: parseNumber(first.Or),
-    organicTraffic: parseNumber(first.Ot),
-    organicCost: parseNumber(first.Oc),
-    adwordsKeywords: parseNumber(first.Ad),
-    adwordsTraffic: parseNumber(first.At),
-    adwordsCost: parseNumber(first.Ac),
+    rank: parseNumber(pick(first, "Rank", "Rk")),
+    organicKeywords: parseNumber(pick(first, "Organic Keywords", "Or")),
+    organicTraffic: parseNumber(pick(first, "Organic Traffic", "Ot")),
+    organicCost: parseNumber(pick(first, "Organic Cost", "Oc")),
+    adwordsKeywords: parseNumber(pick(first, "Adwords Keywords", "Ad")),
+    adwordsTraffic: parseNumber(pick(first, "Adwords Traffic", "At")),
+    adwordsCost: parseNumber(pick(first, "Adwords Cost", "Ac")),
   };
 }
 
@@ -158,17 +171,17 @@ export async function fetchOrganicKeywords(
   return rows.map((row) => {
     const m = rowMap(headers, row);
     return {
-      keyword: m.Ph || "",
-      position: parseNumber(m.Po),
-      previousPosition: parseNumber(m.Pp),
-      positionDifference: parseNumber(m.Pd),
-      searchVolume: parseNumber(m.Nq),
-      cpc: parseNumber(m.Cp),
-      url: m.Ur || null,
-      trafficPercent: parseNumber(m.Tr),
-      trafficCost: parseNumber(m.Tc),
-      competition: parseNumber(m.Co),
-      trends: m.Td || null,
+      keyword: pick(m, "Keyword", "Ph"),
+      position: parseNumber(pick(m, "Position", "Po")),
+      previousPosition: parseNumber(pick(m, "Previous Position", "Pp")),
+      positionDifference: parseNumber(pick(m, "Position Difference", "Pd")),
+      searchVolume: parseNumber(pick(m, "Search Volume", "Nq")),
+      cpc: parseNumber(pick(m, "CPC", "Cp")),
+      url: pick(m, "Url", "URL", "Ur") || null,
+      trafficPercent: parseNumber(pick(m, "Traffic (%)", "Traffic", "Tr")),
+      trafficCost: parseNumber(pick(m, "Traffic Cost (%)", "Traffic Cost", "Tc")),
+      competition: parseNumber(pick(m, "Competition", "Co")),
+      trends: pick(m, "Trends", "Td") || null,
     };
   });
 }
