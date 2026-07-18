@@ -55,10 +55,108 @@ export default async function ClientReportPage({
         </div>
       </div>
 
+      <div className="report-channel-tabs">
+        <Link
+          href={`/reports/${slug}?range=${encodeURIComponent(range)}`}
+          className="report-channel-tab active"
+        >
+          Blended
+        </Link>
+        <Link
+          href={`/reports/${slug}/meta?range=${encodeURIComponent(range)}`}
+          className="report-channel-tab"
+        >
+          Meta Ads
+        </Link>
+        <Link
+          href={`/reports/${slug}/google?range=${encodeURIComponent(range)}`}
+          className="report-channel-tab"
+        >
+          Google Ads
+        </Link>
+      </div>
+
       <div className="notice">
         <strong>Custom client report.</strong> Use this as the AgencyAnalytics-style
-        review page for {data.client.name}. AI recommendations below are generated
-        from the same metrics — review only; apply changes in the ad platforms.
+        review page for {data.client.name}. Open Meta or Google tabs for channel-only
+        reports. AI recommendations are review-only — apply changes in the ad platforms.
+      </div>
+
+      <div className="grid two" style={{ marginBottom: 16 }}>
+        <Link
+          href={`/reports/${slug}/meta?range=${encodeURIComponent(range)}`}
+          className="card report-channel-summary"
+        >
+          <div className="report-channel-summary-top">
+            <span className="badge muted">Meta Ads</span>
+            <span className="report-card-cta" style={{ marginTop: 0 }}>
+              Open channel report →
+            </span>
+          </div>
+          <div className="grid metrics" style={{ gap: 10, marginTop: 12 }}>
+            <div>
+              <div className="metric-label">Spend</div>
+              <div className="metric-value" style={{ fontSize: 20 }}>
+                {money(data.meta?.spend)}
+              </div>
+            </div>
+            <div>
+              <div className="metric-label">Conv.</div>
+              <div className="metric-value" style={{ fontSize: 20 }}>
+                {num(data.meta?.conversions)}
+              </div>
+            </div>
+            <div>
+              <div className="metric-label">CPA</div>
+              <div className="metric-value" style={{ fontSize: 20 }}>
+                {money(data.meta?.cpa)}
+              </div>
+            </div>
+            <div>
+              <div className="metric-label">ROAS</div>
+              <div className="metric-value" style={{ fontSize: 20 }}>
+                {ratio(data.meta?.roas)}
+              </div>
+            </div>
+          </div>
+        </Link>
+        <Link
+          href={`/reports/${slug}/google?range=${encodeURIComponent(range)}`}
+          className="card report-channel-summary"
+        >
+          <div className="report-channel-summary-top">
+            <span className="badge muted">Google Ads</span>
+            <span className="report-card-cta" style={{ marginTop: 0 }}>
+              Open channel report →
+            </span>
+          </div>
+          <div className="grid metrics" style={{ gap: 10, marginTop: 12 }}>
+            <div>
+              <div className="metric-label">Spend</div>
+              <div className="metric-value" style={{ fontSize: 20 }}>
+                {money(data.google?.spend)}
+              </div>
+            </div>
+            <div>
+              <div className="metric-label">Conv.</div>
+              <div className="metric-value" style={{ fontSize: 20 }}>
+                {num(data.google?.conversions)}
+              </div>
+            </div>
+            <div>
+              <div className="metric-label">CPA</div>
+              <div className="metric-value" style={{ fontSize: 20 }}>
+                {money(data.google?.cpa)}
+              </div>
+            </div>
+            <div>
+              <div className="metric-label">ROAS</div>
+              <div className="metric-value" style={{ fontSize: 20 }}>
+                {ratio(data.google?.roas)}
+              </div>
+            </div>
+          </div>
+        </Link>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
