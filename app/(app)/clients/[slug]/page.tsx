@@ -190,7 +190,7 @@ export default async function ClientDetailPage({
                   <td className="mono">{money(c.metrics.cpa)}</td>
                   <td>
                     {href ? (
-                      <Link href={href} className="btn ghost small">
+                      <Link href={href} className="btn primary small">
                         Open ads
                       </Link>
                     ) : (
