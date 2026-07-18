@@ -4,9 +4,31 @@ import { Suspense } from "react";
 import { MetricCard } from "@/components/MetricCard";
 import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
+import { clientBrand } from "@/lib/brand";
 import { getClient } from "@/lib/clients";
 import { getCampaignDetail } from "@/lib/data";
 import { compactRangeLabel, money, normalizeRange, num, pct, ratio } from "@/lib/format";
+import { getClientLogoUrl } from "@/lib/logos";
+
+function formatCta(cta?: string) {
+  if (!cta) return "Learn more";
+  return cta
+    .toLowerCase()
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function displayDomain(url?: string) {
+  if (!url) return "WEBSITE";
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return host.toUpperCase();
+  } catch {
+    return "WEBSITE";
+  }
+}
 
 export default async function CampaignDetailPage({
   params,
@@ -21,6 +43,8 @@ export default async function CampaignDetailPage({
   const platform = sp.platform === "google" ? "google" : "meta";
   const base = getClient(slug);
   if (!base) notFound();
+  const brand = clientBrand(slug);
+  const logoUrl = await getClientLogoUrl(slug);
 
   let data;
   try {
@@ -99,7 +123,7 @@ export default async function CampaignDetailPage({
           <div>
             <h3>Ads in this campaign</h3>
             <p className="muted" style={{ margin: "4px 0 0" }}>
-              Creative thumbnails, copy, and per-ad metrics for every click path.
+              Facebook-style feed previews with live creative + performance.
             </p>
           </div>
           <span className="badge muted">{data.ads.length} ads</span>
@@ -114,91 +138,141 @@ export default async function CampaignDetailPage({
             {data.ads.map((ad) => {
               const hero = ad.assets.find((a) => a.url || a.thumbnailUrl);
               const preview = hero?.url || hero?.thumbnailUrl;
+              const ctaLabel = formatCta(ad.cta);
+              const domain = displayDomain(ad.linkUrl);
+              const carouselAssets = ad.assets
+                .map((asset) => asset.url || asset.thumbnailUrl)
+                .filter(Boolean) as string[];
+              const isCarousel =
+                hero?.type === "carousel" || carouselAssets.length > 1;
+
               return (
-                <article key={ad.id} className="ad-creative-card">
-                  <div className="ad-creative-media">
-                    {preview ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={preview} alt={ad.name} />
-                    ) : (
-                      <div className="ad-creative-empty">No preview</div>
-                    )}
-                    {hero?.type === "video" ? (
-                      <span className="ad-media-tag">Video</span>
-                    ) : null}
-                    {hero?.type === "carousel" ? (
-                      <span className="ad-media-tag">Carousel</span>
-                    ) : null}
+                <article key={ad.id} className="ad-creative-card fb-ad-wrap">
+                  <div className="fb-ad-meta-bar">
+                    <div>
+                      <strong className="fb-ad-internal-name">{ad.name}</strong>
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        {ad.status}
+                        {ad.cta ? ` · ${ctaLabel}` : ""}
+                      </div>
+                    </div>
+                    <div className="ad-metric-chip">
+                      <span>Spend</span>
+                      <strong>{money(ad.metrics.spend)}</strong>
+                    </div>
                   </div>
-                  <div className="ad-creative-body">
-                    <div className="ad-creative-top">
-                      <div>
-                        <strong>{ad.name}</strong>
-                        <div className="muted" style={{ fontSize: 12 }}>
-                          {ad.status}
-                          {ad.cta ? ` · ${ad.cta}` : ""}
+
+                  <div className="fb-ad">
+                    <header className="fb-ad-header">
+                      <div
+                        className="fb-ad-avatar"
+                        style={{
+                          background: logoUrl ? "#fff" : brand.accent,
+                          borderColor: brand.accentSoft,
+                        }}
+                      >
+                        {logoUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={logoUrl} alt="" />
+                        ) : (
+                          <span>{brand.monogram}</span>
+                        )}
+                      </div>
+                      <div className="fb-ad-page">
+                        <div className="fb-ad-page-name">{data.clientName}</div>
+                        <div className="fb-ad-sponsored">
+                          Sponsored · <span aria-hidden>🌐</span>
                         </div>
                       </div>
-                      <div className="ad-metric-chip">
-                        <span>Spend</span>
-                        <strong>{money(ad.metrics.spend)}</strong>
+                      <div className="fb-ad-more" aria-hidden>
+                        ···
                       </div>
-                    </div>
+                    </header>
 
-                    {ad.headline ? <div className="ad-headline">{ad.headline}</div> : null}
                     {ad.primaryText ? (
-                      <p className="ad-primary-text">{ad.primaryText}</p>
-                    ) : null}
-                    {ad.description ? (
-                      <p className="muted ad-desc">{ad.description}</p>
+                      <p className="fb-ad-primary">{ad.primaryText}</p>
                     ) : null}
 
-                    {ad.assets.length > 1 ? (
-                      <div className="ad-asset-strip">
-                        {ad.assets.slice(0, 6).map((asset, idx) => {
-                          const src = asset.url || asset.thumbnailUrl;
-                          if (!src) return null;
-                          return (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              key={`${ad.id}-${idx}`}
-                              src={src}
-                              alt={asset.name || `${ad.name} asset ${idx + 1}`}
-                            />
-                          );
-                        })}
+                    {isCarousel && carouselAssets.length > 1 ? (
+                      <div className="fb-ad-carousel">
+                        {carouselAssets.slice(0, 4).map((src, idx) => (
+                          <div key={`${ad.id}-c-${idx}`} className="fb-ad-carousel-item">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={src} alt="" />
+                            {idx === 0 && hero?.type === "video" ? (
+                              <span className="fb-ad-play" aria-hidden>
+                                ▶
+                              </span>
+                            ) : null}
+                          </div>
+                        ))}
                       </div>
-                    ) : null}
+                    ) : (
+                      <div className="fb-ad-media">
+                        {preview ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={preview} alt={ad.headline || ad.name} />
+                        ) : (
+                          <div className="ad-creative-empty">No creative preview</div>
+                        )}
+                        {hero?.type === "video" ? (
+                          <span className="fb-ad-play" aria-hidden>
+                            ▶
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
 
-                    <div className="ad-metrics-row">
-                      <div>
-                        <span>Clicks</span>
-                        <strong>{num(ad.metrics.clicks)}</strong>
+                    <div className="fb-ad-linkbox">
+                      <div className="fb-ad-linkbox-copy">
+                        <div className="fb-ad-domain">{domain}</div>
+                        {ad.headline ? (
+                          <div className="fb-ad-headline">{ad.headline}</div>
+                        ) : (
+                          <div className="fb-ad-headline">{ad.name}</div>
+                        )}
+                        {ad.description ? (
+                          <div className="fb-ad-desc">{ad.description}</div>
+                        ) : null}
                       </div>
-                      <div>
-                        <span>CTR</span>
-                        <strong>{pct(ad.metrics.ctr)}</strong>
-                      </div>
-                      <div>
-                        <span>Conv.</span>
-                        <strong>{num(ad.metrics.conversions)}</strong>
-                      </div>
-                      <div>
-                        <span>CPA</span>
-                        <strong>{money(ad.metrics.cpa)}</strong>
-                      </div>
+                      {ad.linkUrl ? (
+                        <a
+                          href={ad.linkUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="fb-ad-cta"
+                        >
+                          {ctaLabel}
+                        </a>
+                      ) : (
+                        <span className="fb-ad-cta muted-cta">{ctaLabel}</span>
+                      )}
                     </div>
 
-                    {ad.linkUrl ? (
-                      <a
-                        href={ad.linkUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="ad-link"
-                      >
-                        Open landing page →
-                      </a>
-                    ) : null}
+                    <div className="fb-ad-social" aria-hidden>
+                      <span>Like</span>
+                      <span>Comment</span>
+                      <span>Share</span>
+                    </div>
+                  </div>
+
+                  <div className="ad-metrics-row">
+                    <div>
+                      <span>Clicks</span>
+                      <strong>{num(ad.metrics.clicks)}</strong>
+                    </div>
+                    <div>
+                      <span>CTR</span>
+                      <strong>{pct(ad.metrics.ctr)}</strong>
+                    </div>
+                    <div>
+                      <span>Conv.</span>
+                      <strong>{num(ad.metrics.conversions)}</strong>
+                    </div>
+                    <div>
+                      <span>CPA</span>
+                      <strong>{money(ad.metrics.cpa)}</strong>
+                    </div>
                   </div>
                 </article>
               );
