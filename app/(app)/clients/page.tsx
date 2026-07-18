@@ -92,7 +92,7 @@ export default async function ClientsPage({
                   <td className="mono">{ratio(c.combined.roas)}</td>
                   <td>
                     <Link
-                      className="btn ghost"
+                      className="btn primary small"
                       href={`/clients/${c.client.slug}?range=${range}`}
                     >
                       Open
