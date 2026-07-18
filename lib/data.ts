@@ -2,6 +2,7 @@ import { CLIENTS, getClient } from "./clients";
 import { buildDemoClient, buildDemoPortfolio, sumMetrics } from "./demo-data";
 import { previousRangeKey } from "./format";
 import {
+  fetchGoogleCampaignDetail,
   fetchGoogleCustomerInsights,
   googleConfigured,
   googleLiveEnabled,
@@ -251,23 +252,34 @@ export async function getCampaignDetail(
   if (!client) throw new Error("Client not found");
 
   if (platform === "google") {
-    return {
+    if (!client.googleCustomerId || !googleLiveEnabled()) {
+      return {
+        clientSlug: client.slug,
+        clientName: client.name,
+        campaign: {
+          id: campaignId,
+          name: `Google campaign ${campaignId}`,
+          platform: "google",
+          status: "UNKNOWN",
+          metrics: sumMetrics(null, null),
+        },
+        ads: [],
+        range,
+        source: "partial",
+        notes: [
+          !googleLiveEnabled()
+            ? "Google Ads live pull is paused or not configured."
+            : "Google Ads customer ID not mapped for this client.",
+        ],
+      };
+    }
+    return fetchGoogleCampaignDetail({
+      customerId: client.googleCustomerId,
+      campaignId,
+      range,
       clientSlug: client.slug,
       clientName: client.name,
-      campaign: {
-        id: campaignId,
-        name: `Google campaign ${campaignId}`,
-        platform: "google",
-        status: "UNKNOWN",
-        metrics: sumMetrics(null, null),
-      },
-      ads: [],
-      range,
-      source: "partial",
-      notes: [
-        "Google Ads creative drill-down needs Google API credentials first.",
-      ],
-    };
+    });
   }
 
   if (!client.metaAccountId || !metaConfigured()) {

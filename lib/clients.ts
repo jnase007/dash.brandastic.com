@@ -71,7 +71,8 @@ export const CLIENTS: ClientAccount[] = [
     name: "Atomic Horseradish",
     slug: "atomic-horseradish",
     industry: "CPG / Food",
-    domain: process.env.SEO_DOMAIN_ATOMIC || "",
+    // Product lives under Morehouse Foods; override via SEO_DOMAIN_ATOMIC if needed.
+    domain: process.env.SEO_DOMAIN_ATOMIC || "morehousefoods.com",
     metaAccountId: process.env.META_ACT_ATOMIC || "",
     googleCustomerId: process.env.GADS_ATOMIC || "",
     status: "setup",

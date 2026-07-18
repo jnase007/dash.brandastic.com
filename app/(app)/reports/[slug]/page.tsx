@@ -314,8 +314,8 @@ export default async function ClientReportPage({
           <tbody>
             {data.campaigns.map((c) => {
               const href =
-                c.platform === "meta"
-                  ? `/clients/${slug}/campaigns/${encodeURIComponent(c.id)}?range=${encodeURIComponent(range)}&platform=meta`
+                c.platform === "meta" || c.platform === "google"
+                  ? `/clients/${slug}/campaigns/${encodeURIComponent(c.id)}?range=${encodeURIComponent(range)}&platform=${c.platform}`
                   : null;
               return (
               <tr key={`${c.platform}-${c.id}`} className={href ? "row-clickable" : undefined}>

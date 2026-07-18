@@ -121,7 +121,12 @@ export default async function CampaignDetailPage({
 
       {!sortedAds.length ? (
         <div className="card">
-          <p className="muted">No ads found for this campaign in the selected range.</p>
+          <p className="muted">
+            No ads found for this campaign in the selected range.
+            {platform === "google"
+              ? " RSA/search ads and search terms still load below when available."
+              : ""}
+          </p>
         </div>
       ) : (
         <div className="aa-review-layout">
@@ -229,6 +234,44 @@ export default async function CampaignDetailPage({
           </section>
         </div>
       )}
+
+      {data.searchTerms?.length ? (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card-head-row">
+            <div>
+              <h3>Search terms</h3>
+              <p className="muted" style={{ margin: "4px 0 0" }}>
+                Top spend terms · review only
+              </p>
+            </div>
+            <span className="badge muted">{data.searchTerms.length}</span>
+          </div>
+          <div style={{ overflow: "auto", marginTop: 12 }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Term</th>
+                  <th>Spend</th>
+                  <th>Clicks</th>
+                  <th>Impr.</th>
+                  <th>Conv.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.searchTerms.map((t) => (
+                  <tr key={t.term}>
+                    <td>{t.term}</td>
+                    <td className="mono">{money(t.spend)}</td>
+                    <td className="mono">{num(t.clicks)}</td>
+                    <td className="mono">{num(t.impressions)}</td>
+                    <td className="mono">{num(t.conversions)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

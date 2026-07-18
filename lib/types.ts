@@ -58,6 +58,14 @@ export type AdCreativeRow = {
   assets: CreativeAsset[];
 };
 
+export type SearchTermRow = {
+  term: string;
+  spend: number;
+  clicks: number;
+  impressions: number;
+  conversions: number;
+};
+
 export type CampaignDetail = {
   clientSlug: string;
   clientName: string;
@@ -66,6 +74,8 @@ export type CampaignDetail = {
   range: string;
   source: "live" | "demo" | "partial";
   notes?: string[];
+  /** Google search terms when available (review-only). */
+  searchTerms?: SearchTermRow[];
 };
 
 export type ClientSummary = {

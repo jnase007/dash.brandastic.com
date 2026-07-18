@@ -134,7 +134,7 @@ export function AdPreviewCard({
               </div>
             ))}
           </div>
-        ) : (
+        ) : videoSrc || imageSrc || poster ? (
           <div className="fb-ad-media landscape">
             {videoSrc ? (
               <video
@@ -148,17 +148,34 @@ export function AdPreviewCard({
             ) : imageSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={imageSrc} alt={ad.headline || ad.name} />
-            ) : poster ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={poster} alt={ad.headline || ad.name} />
             ) : (
-              <div className="ad-creative-empty">No creative preview</div>
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={poster!} alt={ad.headline || ad.name} />
             )}
             {!videoSrc && (videoHero || hero?.type === "video") ? (
               <span className="fb-ad-play" aria-hidden>
                 ▶
               </span>
             ) : null}
+          </div>
+        ) : (
+          <div className="rsa-preview">
+            <div className="rsa-preview-kicker">Search ad preview</div>
+            <div className="rsa-preview-url">
+              {ad.linkUrl || domain.toLowerCase()}
+            </div>
+            <div className="rsa-preview-headline">
+              {ad.headline || ad.name}
+            </div>
+            {ad.description || ad.primaryText ? (
+              <div className="rsa-preview-desc">
+                {ad.description || ad.primaryText}
+              </div>
+            ) : (
+              <div className="muted" style={{ fontSize: 13 }}>
+                No RSA copy fields returned for this ad.
+              </div>
+            )}
           </div>
         )}
 

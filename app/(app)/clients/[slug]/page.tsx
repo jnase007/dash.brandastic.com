@@ -162,8 +162,8 @@ export default async function ClientDetailPage({
           <tbody>
             {data.campaigns.map((c) => {
               const href =
-                c.platform === "meta"
-                  ? `/clients/${data.client.slug}/campaigns/${encodeURIComponent(c.id)}?range=${encodeURIComponent(range)}&platform=meta`
+                c.platform === "meta" || c.platform === "google"
+                  ? `/clients/${data.client.slug}/campaigns/${encodeURIComponent(c.id)}?range=${encodeURIComponent(range)}&platform=${c.platform}`
                   : null;
               return (
                 <tr key={`${c.platform}-${c.id}`} className={href ? "row-clickable" : undefined}>
@@ -194,7 +194,7 @@ export default async function ClientDetailPage({
                         Open ads
                       </Link>
                     ) : (
-                      <span className="muted">Google soon</span>
+                      <span className="muted">—</span>
                     )}
                   </td>
                 </tr>
