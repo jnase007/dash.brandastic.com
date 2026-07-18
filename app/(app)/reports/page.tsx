@@ -108,6 +108,12 @@ export default async function ReportsPage({
                 >
                   Google
                 </Link>
+                <Link
+                  className="btn primary small"
+                  href={`/seo/${c.client.slug}`}
+                >
+                  SEO
+                </Link>
               </div>
             </div>
           );

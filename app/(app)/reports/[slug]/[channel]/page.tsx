@@ -123,6 +123,9 @@ export default async function ClientChannelReportPage({
         >
           Google Ads
         </Link>
+        <Link href={`/seo/${slug}`} className="report-channel-tab">
+          SEO
+        </Link>
       </div>
 
       <div className="notice">

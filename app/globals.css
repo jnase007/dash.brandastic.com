@@ -2277,3 +2277,33 @@ code {
 .range-date {
   min-width: 148px;
 }
+
+
+.seo-kw-mini {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.seo-kw-mini-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.seo-kw-mini-row span {
+  color: #344054;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seo-kw-mini-row strong {
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}

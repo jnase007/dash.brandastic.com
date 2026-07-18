@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { googleConfigured } from "@/lib/google-ads";
 import { metaConfigured } from "@/lib/meta";
+import { semrushConfigured } from "@/lib/semrush";
 import { xaiConfigured } from "@/lib/xai";
 
 export async function GET() {
@@ -10,6 +11,7 @@ export async function GET() {
     meta: metaConfigured() ? "configured" : "missing",
     google: googleConfigured() ? "configured" : "missing",
     xai: xaiConfigured() ? "configured" : "missing",
+    semrush: semrushConfigured() ? "configured" : "missing",
     mode:
       process.env.FORCE_DEMO_DATA === "true"
         ? "demo-forced"

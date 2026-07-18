@@ -5,6 +5,8 @@ export type ClientAccount = {
   name: string;
   slug: string;
   industry?: string;
+  /** Primary website domain for SEO (Semrush). */
+  domain?: string;
   metaAccountId?: string;
   googleCustomerId?: string;
   status: "active" | "paused" | "setup";

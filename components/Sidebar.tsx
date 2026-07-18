@@ -9,6 +9,7 @@ const links = [
   { href: "/clients", label: "Clients", icon: "◎" },
   { href: "/insights", label: "AI Insights", icon: "✦" },
   { href: "/reports", label: "Reports", icon: "☰" },
+  { href: "/seo", label: "SEO", icon: "▤" },
   { href: "/meta", label: "Meta Ads", icon: "◈" },
   { href: "/google", label: "Google Ads", icon: "◇" },
 ];
@@ -80,7 +81,7 @@ export function Sidebar() {
       </div>
 
       <div className="sidebar-foot">
-        Review-only Meta + Google dashboard for the Brandastic team and clients.
+        Review-only Meta, Google, and Semrush SEO for the Brandastic team.
       </div>
     </aside>
   );

@@ -74,6 +74,9 @@ export default async function ClientReportPage({
         >
           Google Ads
         </Link>
+        <Link href={`/seo/${slug}`} className="report-channel-tab">
+          SEO
+        </Link>
       </div>
 
       <div className="notice">
@@ -156,6 +159,20 @@ export default async function ClientReportPage({
               </div>
             </div>
           </div>
+        </Link>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <Link href={`/seo/${slug}`} className="card report-channel-summary" style={{ display: "block" }}>
+          <div className="report-channel-summary-top">
+            <span className="badge muted">SEO · Semrush</span>
+            <span className="report-card-cta" style={{ marginTop: 0 }}>
+              Open SEO report →
+            </span>
+          </div>
+          <p className="muted" style={{ margin: "10px 0 0", fontSize: 13 }}>
+            Organic traffic, keyword rankings, and traffic value for this client domain.
+          </p>
         </Link>
       </div>
 
