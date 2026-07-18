@@ -93,46 +93,6 @@ export default async function OverviewPage({
         </div>
       </div>
 
-      <div className="audit-photo-band">
-        <div className="audit-photo-head">
-          <div>
-            <div className="eyebrow">From audit.brandastic.com</div>
-            <h3>Team + office, real Brandastic</h3>
-          </div>
-          <p className="muted">Same partnership-model photography used on the audit site.</p>
-        </div>
-        <div className="audit-photo-grid">
-          <figure className="audit-photo-card">
-            <img src="/team/audit-embedded.jpg" alt="Embedded Partner" />
-            <figcaption>
-              <strong>Embedded Partner</strong>
-              <span>Full-service war room energy</span>
-            </figcaption>
-          </figure>
-          <figure className="audit-photo-card">
-            <img src="/team/audit-extension.jpg" alt="Extension of Your Team" />
-            <figcaption>
-              <strong>Extension of Your Team</strong>
-              <span>In-office collaboration</span>
-            </figcaption>
-          </figure>
-          <figure className="audit-photo-card">
-            <img src="/team/audit-project.jpg" alt="Project-Based" />
-            <figcaption>
-              <strong>Project-Based</strong>
-              <span>Focused delivery sprints</span>
-            </figcaption>
-          </figure>
-          <figure className="audit-photo-card">
-            <img src="/team/audit-ondemand.jpg" alt="On-Demand" />
-            <figcaption>
-              <strong>On-Demand</strong>
-              <span>Fast reviews, real people</span>
-            </figcaption>
-          </figure>
-        </div>
-      </div>
-
       {data.mode !== "live" ? (
         <div className="notice">
           <strong>{data.mode === "demo" ? "Demo mode." : "Partial live data."}</strong>{" "}
