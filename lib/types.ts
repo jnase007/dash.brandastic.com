@@ -77,6 +77,14 @@ export type ClientSummary = {
   campaigns: CampaignRow[];
   source: "live" | "demo" | "partial";
   notes?: string[];
+  /** Prior equal-length window metrics when live comparison succeeded. */
+  previous?: {
+    range: string;
+    combined: MetricSet;
+    meta: MetricSet | null;
+    google: MetricSet | null;
+    source: "live" | "partial" | "unavailable";
+  };
 };
 
 export type PortfolioSummary = {
@@ -90,4 +98,7 @@ export type PortfolioSummary = {
   generatedAt: string;
   mode: "live" | "demo" | "partial";
   notes?: string[];
+  previousTotals?: MetricSet | null;
+  previousRange?: string | null;
+  comparisonSource?: "live" | "partial" | "unavailable";
 };

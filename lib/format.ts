@@ -194,3 +194,27 @@ export function datePreset(range: string) {
     endsOn: "yesterday" as const,
   };
 }
+
+/**
+ * Prior window of equal length immediately before the current range.
+ * Example: last 30d ending yesterday → previous 30 complete days before that.
+ * Returned as a custom range key (`YYYY-MM-DD_YYYY-MM-DD`) for live pulls.
+ */
+export function previousRangeKey(range: string) {
+  const { since, until, days } = datePreset(range);
+  const prevUntil = addIsoDays(since, -1);
+  const prevSince = addIsoDays(prevUntil, -(days - 1));
+  return {
+    key: encodeCustomRange(prevSince, prevUntil),
+    since: prevSince,
+    until: prevUntil,
+    days,
+    currentSince: since,
+    currentUntil: until,
+  };
+}
+
+export function previousRangeLabel(range: string) {
+  const prev = previousRangeKey(range);
+  return compactRangeLabel(prev.key);
+}

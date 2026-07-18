@@ -1,5 +1,6 @@
 import { CLIENTS, getClient } from "./clients";
 import { buildDemoClient, buildDemoPortfolio, sumMetrics } from "./demo-data";
+import { previousRangeKey } from "./format";
 import {
   fetchGoogleCustomerInsights,
   googleConfigured,
@@ -10,7 +11,7 @@ import {
   fetchMetaCampaignDetail,
   metaConfigured,
 } from "./meta";
-import type { CampaignDetail, ClientSummary, PortfolioSummary } from "./types";
+import type { CampaignDetail, ClientSummary, MetricSet, PortfolioSummary } from "./types";
 
 function forceDemo() {
   return process.env.FORCE_DEMO_DATA === "true";
@@ -40,8 +41,11 @@ export async function getPortfolio(range = "30d"): Promise<PortfolioSummary> {
   }
 
   // Parallel client pulls — serial Meta calls made /clients feel broken/slow.
+  // includePrevious so overview deltas are real prior-period, not synthetic.
   const settled = await Promise.allSettled(
-    CLIENTS.map((client) => getClientSummary(client.slug, range))
+    CLIENTS.map((client) =>
+      getClientSummary(client.slug, range, { includePrevious: true })
+    )
   );
   const clients: ClientSummary[] = settled.map((result, i) => {
     const client = CLIENTS[i];
@@ -64,11 +68,31 @@ export async function getPortfolio(range = "30d"): Promise<PortfolioSummary> {
   });
 
   // Live/partial only — unmapped demo shells must not inflate portfolio KPIs.
-  const totals = clients
-    .filter((c) => c.source === "live" || c.source === "partial")
-    .reduce((acc, c) => sumMetrics(acc, c.combined), sumMetrics(null, null));
+  const liveClients = clients.filter(
+    (c) => c.source === "live" || c.source === "partial"
+  );
+  const totals = liveClients.reduce(
+    (acc, c) => sumMetrics(acc, c.combined),
+    sumMetrics(null, null)
+  );
 
-  const anyLive = clients.some((c) => c.source === "live" || c.source === "partial");
+  const prevPieces = liveClients
+    .map((c) => c.previous)
+    .filter((p): p is NonNullable<ClientSummary["previous"]> => Boolean(p));
+  const previousTotals = prevPieces.length
+    ? prevPieces.reduce(
+        (acc, p) => sumMetrics(acc, p.combined),
+        sumMetrics(null, null)
+      )
+    : null;
+  const comparisonSource = previousTotals
+    ? prevPieces.every((p) => p.source === "live")
+      ? ("live" as const)
+      : ("partial" as const)
+    : ("unavailable" as const);
+  const previousRange = prevPieces[0]?.range || previousRangeKey(range).key;
+
+  const anyLive = liveClients.length > 0;
   return {
     range,
     totals,
@@ -80,12 +104,16 @@ export async function getPortfolio(range = "30d"): Promise<PortfolioSummary> {
     generatedAt: new Date().toISOString(),
     mode: anyLive ? (metaOk && googleOk ? "live" : "partial") : "demo",
     notes: notes.length ? notes : undefined,
+    previousTotals,
+    previousRange,
+    comparisonSource,
   };
 }
 
 export async function getClientSummary(
   slug: string,
-  range = "30d"
+  range = "30d",
+  opts: { includePrevious?: boolean } = {}
 ): Promise<ClientSummary> {
   const client = getClient(slug);
   if (!client) throw new Error("Client not found");
@@ -94,8 +122,8 @@ export async function getClientSummary(
     return buildDemoClient(client, range);
   }
 
-  let meta = null;
-  let google = null;
+  let meta = null as MetricSet | null;
+  let google = null as MetricSet | null;
   let metaCampaigns = [] as Awaited<
     ReturnType<typeof fetchMetaAccountInsights>
   >["campaigns"];
@@ -162,7 +190,7 @@ export async function getClientSummary(
     };
   }
 
-  return {
+  const summary: ClientSummary = {
     client,
     range,
     meta,
@@ -174,6 +202,43 @@ export async function getClientSummary(
     source,
     notes: notes.length ? notes : undefined,
   };
+
+  if (opts.includePrevious) {
+    try {
+      const prevKey = previousRangeKey(range).key;
+      // Nested call without includePrevious to avoid recursion.
+      const prev = await getClientSummary(slug, prevKey, {
+        includePrevious: false,
+      });
+      if (prev.source === "live" || prev.source === "partial") {
+        summary.previous = {
+          range: prevKey,
+          combined: prev.combined,
+          meta: prev.meta,
+          google: prev.google,
+          source: prev.source === "live" ? "live" : "partial",
+        };
+      } else {
+        summary.previous = {
+          range: prevKey,
+          combined: sumMetrics(null, null),
+          meta: null,
+          google: null,
+          source: "unavailable",
+        };
+      }
+    } catch {
+      summary.previous = {
+        range: previousRangeKey(range).key,
+        combined: sumMetrics(null, null),
+        meta: null,
+        google: null,
+        source: "unavailable",
+      };
+    }
+  }
+
+  return summary;
 }
 
 export async function getCampaignDetail(

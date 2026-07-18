@@ -6,8 +6,16 @@ export type Delta = {
   direction: "up" | "down" | "flat" | "na";
 };
 
-function delta(current: number | null | undefined, previous: number | null | undefined): Delta {
-  if (current == null || previous == null || Number.isNaN(current) || Number.isNaN(previous)) {
+function delta(
+  current: number | null | undefined,
+  previous: number | null | undefined
+): Delta {
+  if (
+    current == null ||
+    previous == null ||
+    Number.isNaN(current) ||
+    Number.isNaN(previous)
+  ) {
     return { abs: null, pct: null, direction: "na" };
   }
   const abs = current - previous;
@@ -20,9 +28,12 @@ function delta(current: number | null | undefined, previous: number | null | und
   };
 }
 
-/** Stable pseudo previous-period metrics for demo / partial until true history is wired. */
+/**
+ * @deprecated Prefer live prior-period pulls via previousRangeKey + getClientSummary.
+ * Kept only as last-resort UI fallback when previous metrics are unavailable.
+ */
 export function previousMetrics(current: MetricSet, seed = 1): MetricSet {
-  const factor = 0.86 + ((seed % 7) * 0.03);
+  const factor = 0.86 + (seed % 7) * 0.03;
   const spend = current.spend * factor;
   const impressions = current.impressions * (factor + 0.02);
   const clicks = current.clicks * (factor - 0.01);
@@ -35,11 +46,22 @@ export function previousMetrics(current: MetricSet, seed = 1): MetricSet {
     cpc: clicks ? spend / clicks : null,
     conversions,
     cpa: conversions ? spend / conversions : null,
-    roas: current.roas == null ? null : current.roas * (1.08 - (seed % 5) * 0.03),
+    roas:
+      current.roas == null ? null : current.roas * (1.08 - (seed % 5) * 0.03),
   };
 }
 
-export function metricDeltas(current: MetricSet, previous: MetricSet) {
+export function metricDeltas(current: MetricSet, previous: MetricSet | null | undefined) {
+  if (!previous) {
+    return {
+      spend: delta(null, null),
+      clicks: delta(null, null),
+      conversions: delta(null, null),
+      cpa: delta(null, null),
+      roas: delta(null, null),
+      ctr: delta(null, null),
+    };
+  }
   return {
     spend: delta(current.spend, previous.spend),
     clicks: delta(current.clicks, previous.clicks),
@@ -48,6 +70,19 @@ export function metricDeltas(current: MetricSet, previous: MetricSet) {
     roas: delta(current.roas, previous.roas),
     ctr: delta(current.ctr, previous.ctr),
   };
+}
+
+/** Build a tiny sparkline from previous → midpoint → current for one metric. */
+export function sparkFromPair(
+  previous: number | null | undefined,
+  current: number | null | undefined
+) {
+  const a = previous == null || Number.isNaN(previous) ? 0 : Math.max(0, previous);
+  const c = current == null || Number.isNaN(current) ? 0 : Math.max(0, current);
+  const b = (a + c) / 2;
+  // Avoid all-zero flatline looking broken.
+  if (a === 0 && c === 0) return [8, 8, 8, 8, 8, 8, 8];
+  return [a, a * 0.98 + b * 0.02, b, b * 0.9 + c * 0.1, c * 0.85 + b * 0.15, c * 0.95, c];
 }
 
 /** For cost metrics, down is good. For volume/ROAS, up is good. */

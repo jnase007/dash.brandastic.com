@@ -7,13 +7,22 @@ import { MetricCard } from "@/components/MetricCard";
 import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getClient } from "@/lib/clients";
+import { metricDeltas, sparkFromPair } from "@/lib/compare";
 import { getClientSummary } from "@/lib/data";
-import { compactRangeLabel, money, normalizeRange, num, pct, ratio } from "@/lib/format";
-import { metricDeltas, previousMetrics } from "@/lib/compare";
+import {
+  compactRangeLabel,
+  money,
+  normalizeRange,
+  num,
+  pct,
+  previousRangeLabel,
+  ratio,
+} from "@/lib/format";
 import {
   buildClientInsights,
   buildClientReportNarrative,
 } from "@/lib/insights";
+import { getClientSemrushSeo } from "@/lib/semrush";
 
 export default async function ClientReportPage({
   params,
@@ -27,11 +36,16 @@ export default async function ClientReportPage({
   const range = normalizeRange(sp.range);
   if (!getClient(slug)) notFound();
 
-  const data = await getClientSummary(slug, range);
+  const data = await getClientSummary(slug, range, { includePrevious: true });
   const insights = buildClientInsights(data);
   const narrative = buildClientReportNarrative(data);
-  const prev = previousMetrics(data.combined, data.client.name.length);
+  const prev = data.previous?.combined || null;
   const deltas = metricDeltas(data.combined, prev);
+  const compareLabel =
+    data.previous && data.previous.source !== "unavailable"
+      ? `vs prior ${previousRangeLabel(range).toLowerCase()} · ${data.previous.source}`
+      : "prior period unavailable";
+  const seo = await getClientSemrushSeo(data.client, { keywordLimit: 5 });
 
   return (
     <div>
@@ -170,9 +184,50 @@ export default async function ClientReportPage({
               Open SEO report →
             </span>
           </div>
-          <p className="muted" style={{ margin: "10px 0 0", fontSize: 13 }}>
-            Organic traffic, keyword rankings, and traffic value for this client domain.
-          </p>
+          {seo.overview ? (
+            <div className="grid metrics" style={{ gap: 10, marginTop: 12 }}>
+              <div>
+                <div className="metric-label">Traffic</div>
+                <div className="metric-value" style={{ fontSize: 20 }}>
+                  {num(seo.overview.organicTraffic)}
+                </div>
+              </div>
+              <div>
+                <div className="metric-label">Keywords</div>
+                <div className="metric-value" style={{ fontSize: 20 }}>
+                  {num(seo.overview.organicKeywords)}
+                </div>
+              </div>
+              <div>
+                <div className="metric-label">Value</div>
+                <div className="metric-value" style={{ fontSize: 20 }}>
+                  {money(seo.overview.organicCost)}
+                </div>
+              </div>
+              <div>
+                <div className="metric-label">Rank</div>
+                <div className="metric-value" style={{ fontSize: 20 }}>
+                  {num(seo.overview.rank)}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="muted" style={{ margin: "10px 0 0", fontSize: 13 }}>
+              {seo.domain
+                ? seo.notes[0] || "SEO snapshot unavailable."
+                : "Map a domain to unlock Semrush SEO."}
+            </p>
+          )}
+          {seo.organicKeywords?.length ? (
+            <p className="muted" style={{ margin: "10px 0 0", fontSize: 12 }}>
+              Top terms:{" "}
+              {seo.organicKeywords
+                .slice(0, 3)
+                .map((k) => k.keyword)
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          ) : null}
         </Link>
       </div>
 
@@ -192,30 +247,34 @@ export default async function ClientReportPage({
         <MetricCard
           label="Spend"
           value={money(data.combined.spend)}
-          sub="vs prior period"
+          sub={compareLabel}
           delta={deltas.spend}
           deltaKey="spend"
+          spark={sparkFromPair(prev?.spend, data.combined.spend)}
         />
         <MetricCard
           label="Clicks"
           value={num(data.combined.clicks)}
-          sub={`CTR ${pct(data.combined.ctr)}`}
+          sub={`CTR ${pct(data.combined.ctr)} · ${compareLabel}`}
           delta={deltas.clicks}
           deltaKey="clicks"
+          spark={sparkFromPair(prev?.clicks, data.combined.clicks)}
         />
         <MetricCard
           label="Conversions"
           value={num(data.combined.conversions)}
-          sub={`CPA ${money(data.combined.cpa)}`}
+          sub={`CPA ${money(data.combined.cpa)} · ${compareLabel}`}
           delta={deltas.conversions}
           deltaKey="conversions"
+          spark={sparkFromPair(prev?.conversions, data.combined.conversions)}
         />
         <MetricCard
           label="ROAS"
           value={ratio(data.combined.roas)}
-          sub="Blended Meta + Google"
+          sub={`Blended Meta + Google · ${compareLabel}`}
           delta={deltas.roas}
           deltaKey="roas"
+          spark={sparkFromPair(prev?.roas ?? null, data.combined.roas)}
         />
       </div>
 
@@ -253,11 +312,25 @@ export default async function ClientReportPage({
             </tr>
           </thead>
           <tbody>
-            {data.campaigns.map((c) => (
-              <tr key={`${c.platform}-${c.id}`}>
+            {data.campaigns.map((c) => {
+              const href =
+                c.platform === "meta"
+                  ? `/clients/${slug}/campaigns/${encodeURIComponent(c.id)}?range=${encodeURIComponent(range)}&platform=meta`
+                  : null;
+              return (
+              <tr key={`${c.platform}-${c.id}`} className={href ? "row-clickable" : undefined}>
                 <td>
-                  <div className="client-name">{c.name}</div>
-                  {c.objective ? <div className="client-meta">{c.objective}</div> : null}
+                  {href ? (
+                    <Link href={href} className="campaign-link">
+                      <div className="client-name">{c.name}</div>
+                      {c.objective ? <div className="client-meta">{c.objective}</div> : null}
+                    </Link>
+                  ) : (
+                    <>
+                      <div className="client-name">{c.name}</div>
+                      {c.objective ? <div className="client-meta">{c.objective}</div> : null}
+                    </>
+                  )}
                 </td>
                 <td>
                   <span className="badge muted">{c.platform}</span>
@@ -269,7 +342,8 @@ export default async function ClientReportPage({
                 <td className="mono">{money(c.metrics.cpa)}</td>
                 <td className="mono">{ratio(c.metrics.roas)}</td>
               </tr>
-            ))}
+            );
+            })}
             {!data.campaigns.length ? (
               <tr>
                 <td colSpan={8} className="muted">

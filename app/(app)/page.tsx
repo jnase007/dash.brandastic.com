@@ -1,14 +1,24 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { ClientLogo } from "@/components/ClientLogo";
+import { CoverageStrip } from "@/components/CoverageStrip";
 import { InsightList } from "@/components/InsightList";
 import { MetricCard } from "@/components/MetricCard";
 import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import { clientBrand } from "@/lib/brand";
-import { metricDeltas, previousMetrics } from "@/lib/compare";
+import { metricDeltas, sparkFromPair } from "@/lib/compare";
+import { buildPortfolioCoverage } from "@/lib/coverage";
 import { getPortfolio } from "@/lib/data";
-import { compactRangeLabel, money, normalizeRange, num, pct, ratio } from "@/lib/format";
+import {
+  compactRangeLabel,
+  money,
+  normalizeRange,
+  num,
+  pct,
+  previousRangeLabel,
+  ratio,
+} from "@/lib/format";
 import { getPortfolioInsights } from "@/lib/insights";
 import { getClientLogoMap } from "@/lib/logos";
 
@@ -23,8 +33,13 @@ export default async function OverviewPage({
   const sp = await searchParams;
   const range = normalizeRange(sp.range);
   const data = await getPortfolio(range);
-  const prev = previousMetrics(data.totals, 3);
+  const prev = data.previousTotals || null;
   const deltas = metricDeltas(data.totals, prev);
+  const compareLabel =
+    data.comparisonSource && data.comparisonSource !== "unavailable"
+      ? `vs prior ${previousRangeLabel(range).toLowerCase()} · ${data.comparisonSource}`
+      : "prior period unavailable";
+  const coverage = buildPortfolioCoverage(data);
   const ai = await getPortfolioInsights(data, { limit: 20 });
   const insights = ai.insights;
   const priority = insights.filter((i) => i.severity === "high" || i.severity === "medium").slice(0, 6);
@@ -101,38 +116,42 @@ export default async function OverviewPage({
         </div>
       ) : null}
 
+      <div style={{ marginBottom: 16 }}>
+        <CoverageStrip clients={coverage.clients} totals={coverage.totals} />
+      </div>
+
       <div className="grid metrics" style={{ marginBottom: 16 }}>
         <MetricCard
           label="Total spend"
           value={money(data.totals.spend)}
-          sub={`vs prior ${compactRangeLabel(range).toLowerCase()}`}
+          sub={compareLabel}
           delta={deltas.spend}
           deltaKey="spend"
-          spark={[32, 30, 36, 40, 38, 44, 48]}
+          spark={sparkFromPair(prev?.spend, data.totals.spend)}
         />
         <MetricCard
           label="Clicks"
           value={num(data.totals.clicks)}
-          sub={`CTR ${pct(data.totals.ctr)}`}
+          sub={`CTR ${pct(data.totals.ctr)} · ${compareLabel}`}
           delta={deltas.clicks}
           deltaKey="clicks"
-          spark={[20, 24, 22, 28, 30, 27, 34]}
+          spark={sparkFromPair(prev?.clicks, data.totals.clicks)}
         />
         <MetricCard
           label="Conversions"
           value={num(data.totals.conversions)}
-          sub={`CPA ${money(data.totals.cpa)}`}
+          sub={`CPA ${money(data.totals.cpa)} · ${compareLabel}`}
           delta={deltas.conversions}
           deltaKey="conversions"
-          spark={[12, 14, 13, 18, 17, 21, 24]}
+          spark={sparkFromPair(prev?.conversions, data.totals.conversions)}
         />
         <MetricCard
           label="Blended ROAS"
           value={ratio(data.totals.roas)}
-          sub={`Impr. ${num(data.totals.impressions)}`}
+          sub={`Impr. ${num(data.totals.impressions)} · ${compareLabel}`}
           delta={deltas.roas}
           deltaKey="roas"
-          spark={[18, 20, 19, 23, 25, 24, 28]}
+          spark={sparkFromPair(prev?.roas ?? null, data.totals.roas)}
         />
       </div>
 
