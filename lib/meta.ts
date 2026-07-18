@@ -320,16 +320,39 @@ function extractAssets(
   }
 
   // 5) Top-level video_id / thumbnail fallback
-  if (creative?.video_id) {
+  // Only push creative.video_id if we actually resolved it (page videos often 400).
+  if (creative?.video_id && pickVideo(String(creative.video_id))) {
     pushVideo(String(creative.video_id), creative?.thumbnail_url);
   }
-  if (!assets.length && creative?.thumbnail_url) {
+  if (!assets.length && (creative?.thumbnail_url || creative?.image_url)) {
+    const isVideoish = Boolean(
+      creative?.video_id ||
+        afs?.videos?.length ||
+        creative?.object_story_spec?.video_data?.video_id
+    );
     push({
-      type: creative?.video_id || afs?.videos?.length ? "video" : "image",
-      thumbnailUrl: String(creative.thumbnail_url),
-      url: creative.image_url ? String(creative.image_url) : String(creative.thumbnail_url),
+      type: isVideoish ? "video" : "image",
+      thumbnailUrl: creative?.thumbnail_url
+        ? String(creative.thumbnail_url)
+        : undefined,
+      url: creative.image_url
+        ? String(creative.image_url)
+        : creative?.thumbnail_url
+          ? String(creative.thumbnail_url)
+          : undefined,
     });
   }
+
+  // If we have a resolved video with source but only tiny creative thumbs were
+  // pushed earlier, ensure the best resolved video asset is first.
+  assets.sort((a, b) => {
+    const score = (x: CreativeAsset) =>
+      (x.videoUrl ? 8 : 0) +
+      (x.thumbnailUrl && !/p64x64|p130x130|p160x160/i.test(x.thumbnailUrl) ? 4 : 0) +
+      (x.type === "video" ? 2 : 0) +
+      (x.url ? 1 : 0);
+    return score(b) - score(a);
+  });
 
   return assets;
 }
@@ -425,9 +448,11 @@ async function resolveVideos(videoIds: string[]) {
   await Promise.all(
     unique.map(async (id) => {
       try {
+        // Ad-library / uploaded advideo IDs work with ads token.
+        // Page video IDs often need pages_read_engagement and 400.
         const video = await graph(`/${id}`, {
           fields:
-            "id,title,picture,source,length,thumbnails.limit(3){uri,is_preferred,width,height}",
+            "id,title,picture,source,length,format,thumbnails.limit(8){uri,is_preferred,width,height}",
         });
         map.set(id, video);
       } catch {
@@ -440,8 +465,10 @@ async function resolveVideos(videoIds: string[]) {
 
 function collectVideoIds(creative: any): string[] {
   const ids: string[] = [];
-  if (creative?.video_id) ids.push(String(creative.video_id));
   const oss = creative?.object_story_spec || {};
+  // Prefer object_story_spec.video_data.video_id — this is the ad-upload video
+  // that Marketing API can read (source + hi-res thumbs). creative.video_id is
+  // often a page video node that 400s without pages_read_engagement.
   if (oss?.video_data?.video_id) ids.push(String(oss.video_data.video_id));
   const afs = creative?.asset_feed_spec || {};
   if (Array.isArray(afs.videos)) {
@@ -449,6 +476,8 @@ function collectVideoIds(creative: any): string[] {
       if (vid?.video_id) ids.push(String(vid.video_id));
     }
   }
+  if (creative?.video_id) ids.push(String(creative.video_id));
+  if (oss?.link_data?.video_id) ids.push(String(oss.link_data.video_id));
   return ids;
 }
 
@@ -457,18 +486,35 @@ async function resolvePageProfiles(pageIds: string[]) {
   const map = new Map<string, { name?: string; pictureUrl?: string }>();
   await Promise.all(
     unique.map(async (id) => {
+      let name: string | undefined;
+      let pictureUrl: string | undefined;
+
+      // Full page node often needs pages_read_engagement — try, but don't depend on it.
       try {
         const page = await graph(`/${id}`, {
           fields: "name,picture.width(200).height(200)",
         });
-        map.set(id, {
-          name: page?.name ? String(page.name) : undefined,
-          pictureUrl: page?.picture?.data?.url
-            ? String(page.picture.data.url)
-            : undefined,
-        });
+        if (page?.name) name = String(page.name);
+        if (page?.picture?.data?.url) pictureUrl = String(page.picture.data.url);
       } catch {
-        // Page lookup is best-effort (token may lack pages_read_engagement).
+        // fall through
+      }
+
+      // /picture?redirect=0 works with ads token even when page fields 400.
+      if (!pictureUrl) {
+        try {
+          const pic = await graph(`/${id}/picture`, {
+            redirect: "0",
+            type: "large",
+          });
+          if (pic?.data?.url) pictureUrl = String(pic.data.url);
+        } catch {
+          // best-effort
+        }
+      }
+
+      if (name || pictureUrl) {
+        map.set(id, { name, pictureUrl });
       }
     })
   );
