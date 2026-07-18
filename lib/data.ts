@@ -50,13 +50,23 @@ export async function getPortfolio(range = "30d"): Promise<PortfolioSummary> {
       result.reason?.message ||
       (typeof result.reason === "string" ? result.reason : "failed");
     notes.push(`${client.name}: ${msg}`);
-    return buildDemoClient(client, range);
+    // Empty shell on pull failure — never inject demo spend into live totals.
+    return {
+      client,
+      range,
+      meta: null,
+      google: null,
+      combined: sumMetrics(null, null),
+      campaigns: [],
+      source: "demo" as const,
+      notes: [msg],
+    };
   });
 
-  const totals = clients.reduce(
-    (acc, c) => sumMetrics(acc, c.combined),
-    sumMetrics(null, null)
-  );
+  // Live/partial only — unmapped demo shells must not inflate portfolio KPIs.
+  const totals = clients
+    .filter((c) => c.source === "live" || c.source === "partial")
+    .reduce((acc, c) => sumMetrics(acc, c.combined), sumMetrics(null, null));
 
   const anyLive = clients.some((c) => c.source === "live" || c.source === "partial");
   return {
@@ -133,8 +143,24 @@ export async function getClientSummary(
         : "partial"
       : "demo";
 
-  // If no live data, fall back to demo for review UI
-  if (source === "demo") return buildDemoClient(client, range);
+  // Unmapped / no-live clients stay empty shells in live mode.
+  // Demo numbers are only for FORCE_DEMO_DATA or fully disconnected mode.
+  if (source === "demo") {
+    return {
+      client,
+      range,
+      meta: null,
+      google: null,
+      combined: sumMetrics(null, null),
+      campaigns: [],
+      source: "demo",
+      notes: notes.length
+        ? notes
+        : client.status === "setup"
+          ? ["Account mapping pending — add Meta act_ / Google customer ID."]
+          : ["No live Meta/Google data for this client yet."],
+    };
+  }
 
   return {
     client,
