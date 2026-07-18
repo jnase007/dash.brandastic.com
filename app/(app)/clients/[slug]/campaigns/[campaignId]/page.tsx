@@ -136,11 +136,27 @@ export default async function CampaignDetailPage({
         ) : (
           <div className="ad-creative-grid">
             {data.ads.map((ad) => {
-              const hero = ad.assets.find(
-                (a) => a.videoUrl || a.url || a.thumbnailUrl
+              // Prefer a real video asset first so we don't mis-detect carousel
+              // from multiple fallback thumbs of the same video ad.
+              const videoHero =
+                ad.assets.find((a) => a.videoUrl) ||
+                ad.assets.find((a) => a.type === "video");
+              const imageAssets = ad.assets.filter(
+                (a) =>
+                  a.type !== "video" &&
+                  !a.videoUrl &&
+                  Boolean(a.url || a.thumbnailUrl)
               );
-              const poster = hero?.thumbnailUrl || hero?.url;
-              const videoSrc = hero?.videoUrl;
+              const hero =
+                videoHero ||
+                ad.assets.find((a) => a.url || a.thumbnailUrl) ||
+                imageAssets[0];
+              const poster =
+                videoHero?.thumbnailUrl ||
+                videoHero?.url ||
+                hero?.thumbnailUrl ||
+                hero?.url;
+              const videoSrc = videoHero?.videoUrl;
               const imageSrc =
                 hero?.type === "video"
                   ? poster
@@ -149,11 +165,12 @@ export default async function CampaignDetailPage({
               const domain = displayDomain(ad.linkUrl);
               const pageLabel = ad.pageName || data.clientName;
               const avatarUrl = ad.pagePictureUrl || logoUrl;
-              const carouselAssets = ad.assets
-                .map((asset) => asset.url || asset.thumbnailUrl || asset.videoUrl)
+              const carouselAssets = imageAssets
+                .map((asset) => asset.url || asset.thumbnailUrl)
                 .filter(Boolean) as string[];
               const isCarousel =
-                hero?.type === "carousel" || carouselAssets.length > 1;
+                !videoSrc &&
+                (hero?.type === "carousel" || carouselAssets.length > 1);
 
               return (
                 <article key={ad.id} className="ad-preview-card">
@@ -164,7 +181,7 @@ export default async function CampaignDetailPage({
                       <div className="muted" style={{ fontSize: 12 }}>
                         {ad.status}
                         {ad.cta ? ` · ${ctaLabel}` : ""}
-                        {hero?.type === "video" ? " · Video" : ""}
+                        {videoHero || hero?.type === "video" ? " · Video" : ""}
                       </div>
                     </div>
                     <div className="ad-metric-chip">
@@ -213,11 +230,6 @@ export default async function CampaignDetailPage({
                           <div key={`${ad.id}-c-${idx}`} className="fb-ad-carousel-item">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={src} alt="" />
-                            {idx === 0 && hero?.type === "video" ? (
-                              <span className="fb-ad-play" aria-hidden>
-                                ▶
-                              </span>
-                            ) : null}
                           </div>
                         ))}
                       </div>
@@ -235,10 +247,13 @@ export default async function CampaignDetailPage({
                         ) : imageSrc ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={imageSrc} alt={ad.headline || ad.name} />
+                        ) : poster ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={poster} alt={ad.headline || ad.name} />
                         ) : (
                           <div className="ad-creative-empty">No creative preview</div>
                         )}
-                        {!videoSrc && hero?.type === "video" ? (
+                        {!videoSrc && (videoHero || hero?.type === "video") ? (
                           <span className="fb-ad-play" aria-hidden>
                             ▶
                           </span>

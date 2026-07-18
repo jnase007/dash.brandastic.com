@@ -6,6 +6,7 @@ import type {
   MetricSet,
 } from "./types";
 import { datePreset } from "./format";
+import { proxiedMediaUrl } from "./media-proxy";
 
 const API_VERSION = process.env.META_API_VERSION || "v21.0";
 
@@ -164,18 +165,40 @@ function extractAssets(
     return extras.videos.get(String(videoId)) || null;
   };
 
+  const bestVideoThumb = (video: any): string | undefined => {
+    const thumbs = Array.isArray(video?.thumbnails?.data)
+      ? video.thumbnails.data
+      : [];
+    if (thumbs.length) {
+      const preferred = thumbs.find((t: any) => t?.is_preferred && t?.uri);
+      if (preferred?.uri) return String(preferred.uri);
+      const largest = [...thumbs]
+        .filter((t: any) => t?.uri)
+        .sort(
+          (a: any, b: any) =>
+            Number(b?.width || 0) * Number(b?.height || 0) -
+            Number(a?.width || 0) * Number(a?.height || 0)
+        )[0];
+      if (largest?.uri) return String(largest.uri);
+    }
+    if (video?.picture) return String(video.picture);
+    return undefined;
+  };
+
   const pushVideo = (videoId?: string | null, fallbackThumb?: string | null, name?: string) => {
     const video = pickVideo(videoId);
     const thumb =
-      video?.picture ||
-      video?.thumbnails?.data?.[0]?.uri ||
+      bestVideoThumb(video) ||
       fallbackThumb ||
+      extras?.post?.full_picture ||
       creative?.thumbnail_url ||
+      creative?.image_url ||
       undefined;
     const source = video?.source || undefined;
     push({
       type: "video",
-      url: source || thumb || undefined,
+      // Prefer poster/image URL in `url` so UI never treats the mp4 as an <img>.
+      url: thumb || source || undefined,
       thumbnailUrl: thumb || undefined,
       videoUrl: source || undefined,
       name: name || (videoId ? `Video ${videoId}` : "Video"),
@@ -603,6 +626,19 @@ export async function fetchMetaCampaignDetail(opts: {
     });
     const pageFromPost = post?.from;
     const page = copy.pageId ? pageMap.get(copy.pageId) : undefined;
+    const pagePictureRaw =
+      page?.pictureUrl ||
+      pageFromPost?.picture?.data?.url ||
+      undefined;
+
+    // Proxy FB CDN URLs — browsers often fail direct hotlinks (broken posters/avatars).
+    const proxiedAssets = assets.map((asset) => ({
+      ...asset,
+      url: proxiedMediaUrl(asset.url) || asset.url,
+      thumbnailUrl: proxiedMediaUrl(asset.thumbnailUrl) || asset.thumbnailUrl,
+      videoUrl: proxiedMediaUrl(asset.videoUrl) || asset.videoUrl,
+    }));
+
     return {
       id: String(ad.id),
       name: ad.name || `Ad ${ad.id}`,
@@ -613,12 +649,9 @@ export async function fetchMetaCampaignDetail(opts: {
       cta: copy.cta,
       linkUrl: copy.linkUrl,
       pageName: page?.name || pageFromPost?.name || undefined,
-      pagePictureUrl:
-        page?.pictureUrl ||
-        pageFromPost?.picture?.data?.url ||
-        undefined,
+      pagePictureUrl: proxiedMediaUrl(pagePictureRaw) || pagePictureRaw,
       metrics: metricsByAd.get(String(ad.id)) || emptyMetrics(),
-      assets,
+      assets: proxiedAssets,
     };
   });
 

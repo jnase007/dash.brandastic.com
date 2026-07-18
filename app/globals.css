@@ -1860,15 +1860,23 @@ code {
 
 .fb-ad-media img,
 .fb-ad-media .fb-ad-video {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
-  background: #000;
+  background: #0b1220;
 }
 
 .fb-ad-media .fb-ad-video {
-  object-fit: contain;
+  object-fit: cover;
+  background: #000;
+}
+
+.fb-ad-media.landscape img,
+.fb-ad-media.landscape .fb-ad-video {
+  object-fit: cover;
 }
 
 .fb-ad-carousel {
