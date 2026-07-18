@@ -1858,11 +1858,17 @@ code {
   max-height: none;
 }
 
-.fb-ad-media img {
+.fb-ad-media img,
+.fb-ad-media .fb-ad-video {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  background: #000;
+}
+
+.fb-ad-media .fb-ad-video {
+  object-fit: contain;
 }
 
 .fb-ad-carousel {

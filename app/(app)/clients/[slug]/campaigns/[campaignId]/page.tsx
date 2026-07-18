@@ -136,14 +136,21 @@ export default async function CampaignDetailPage({
         ) : (
           <div className="ad-creative-grid">
             {data.ads.map((ad) => {
-              const hero = ad.assets.find((a) => a.url || a.thumbnailUrl);
-              const preview = hero?.url || hero?.thumbnailUrl;
+              const hero = ad.assets.find(
+                (a) => a.videoUrl || a.url || a.thumbnailUrl
+              );
+              const poster = hero?.thumbnailUrl || hero?.url;
+              const videoSrc = hero?.videoUrl;
+              const imageSrc =
+                hero?.type === "video"
+                  ? poster
+                  : hero?.url || hero?.thumbnailUrl;
               const ctaLabel = formatCta(ad.cta);
               const domain = displayDomain(ad.linkUrl);
               const pageLabel = ad.pageName || data.clientName;
               const avatarUrl = ad.pagePictureUrl || logoUrl;
               const carouselAssets = ad.assets
-                .map((asset) => asset.url || asset.thumbnailUrl)
+                .map((asset) => asset.url || asset.thumbnailUrl || asset.videoUrl)
                 .filter(Boolean) as string[];
               const isCarousel =
                 hero?.type === "carousel" || carouselAssets.length > 1;
@@ -157,6 +164,7 @@ export default async function CampaignDetailPage({
                       <div className="muted" style={{ fontSize: 12 }}>
                         {ad.status}
                         {ad.cta ? ` · ${ctaLabel}` : ""}
+                        {hero?.type === "video" ? " · Video" : ""}
                       </div>
                     </div>
                     <div className="ad-metric-chip">
@@ -215,13 +223,22 @@ export default async function CampaignDetailPage({
                       </div>
                     ) : (
                       <div className="fb-ad-media landscape">
-                        {preview ? (
+                        {videoSrc ? (
+                          <video
+                            className="fb-ad-video"
+                            src={videoSrc}
+                            poster={poster || undefined}
+                            controls
+                            playsInline
+                            preload="metadata"
+                          />
+                        ) : imageSrc ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={preview} alt={ad.headline || ad.name} />
+                          <img src={imageSrc} alt={ad.headline || ad.name} />
                         ) : (
                           <div className="ad-creative-empty">No creative preview</div>
                         )}
-                        {hero?.type === "video" ? (
+                        {!videoSrc && hero?.type === "video" ? (
                           <span className="fb-ad-play" aria-hidden>
                             ▶
                           </span>

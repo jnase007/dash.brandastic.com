@@ -137,29 +137,132 @@ function collectHashes(creative: any): string[] {
   return hashes;
 }
 
-function extractAssets(creative: any, hashMap: Map<string, string>): CreativeAsset[] {
+function extractAssets(
+  creative: any,
+  hashMap: Map<string, string>,
+  extras?: {
+    post?: any;
+    videos?: Map<string, any>;
+  }
+): CreativeAsset[] {
   const assets: CreativeAsset[] = [];
   const seen = new Set<string>();
   const push = (asset: CreativeAsset) => {
-    const key = asset.url || asset.thumbnailUrl || asset.name || Math.random().toString();
+    const key =
+      asset.videoUrl ||
+      asset.url ||
+      asset.thumbnailUrl ||
+      asset.name ||
+      Math.random().toString();
     if (seen.has(key)) return;
     seen.add(key);
     assets.push(asset);
   };
 
+  const pickVideo = (videoId?: string | null) => {
+    if (!videoId || !extras?.videos) return null;
+    return extras.videos.get(String(videoId)) || null;
+  };
+
+  const pushVideo = (videoId?: string | null, fallbackThumb?: string | null, name?: string) => {
+    const video = pickVideo(videoId);
+    const thumb =
+      video?.picture ||
+      video?.thumbnails?.data?.[0]?.uri ||
+      fallbackThumb ||
+      creative?.thumbnail_url ||
+      undefined;
+    const source = video?.source || undefined;
+    push({
+      type: "video",
+      url: source || thumb || undefined,
+      thumbnailUrl: thumb || undefined,
+      videoUrl: source || undefined,
+      name: name || (videoId ? `Video ${videoId}` : "Video"),
+    });
+  };
+
+  // 1) Published post attachments (AgencyAnalytics-style: real feed creative)
+  const post = extras?.post;
+  if (post) {
+    const attachments = post?.attachments?.data || [];
+    for (const att of attachments) {
+      const sub = att?.subattachments?.data || [];
+      if (sub.length) {
+        for (const child of sub) {
+          const media = child?.media || {};
+          const target = child?.target || {};
+          if (target?.id && String(child?.type || "").includes("video")) {
+            pushVideo(String(target.id), media?.image?.src, child?.title);
+          } else if (media?.image?.src || child?.url) {
+            push({
+              type: "carousel",
+              url: media?.image?.src || child?.url,
+              thumbnailUrl: media?.image?.src,
+              name: child?.title,
+            });
+          }
+        }
+      } else {
+        const media = att?.media || {};
+        const target = att?.target || {};
+        const isVideo =
+          String(att?.type || "").includes("video") ||
+          Boolean(media?.source) ||
+          Boolean(target?.id && creative?.video_id);
+        if (isVideo) {
+          pushVideo(
+            target?.id || creative?.video_id,
+            media?.image?.src || post?.full_picture,
+            att?.title
+          );
+        } else if (media?.image?.src || att?.url || post?.full_picture) {
+          push({
+            type: "image",
+            url: media?.image?.src || att?.url || post?.full_picture,
+            thumbnailUrl: media?.image?.src || post?.full_picture,
+            name: att?.title,
+          });
+        }
+      }
+    }
+    if (!assets.length && post?.full_picture) {
+      push({
+        type: creative?.video_id ? "video" : "image",
+        url: String(post.full_picture),
+        thumbnailUrl: String(post.full_picture),
+        videoUrl: pickVideo(creative?.video_id)?.source,
+      });
+    }
+  }
+
+  // 2) Creative-level image / hash
   if (creative?.image_url) {
-    push({ type: "image", url: String(creative.image_url), thumbnailUrl: creative.thumbnail_url });
+    push({
+      type: "image",
+      url: String(creative.image_url),
+      thumbnailUrl: creative.thumbnail_url ? String(creative.thumbnail_url) : undefined,
+    });
   }
   if (creative?.image_hash && hashMap.get(String(creative.image_hash))) {
     push({
       type: "image",
       url: hashMap.get(String(creative.image_hash)),
-      thumbnailUrl: creative.thumbnail_url,
+      thumbnailUrl: creative.thumbnail_url ? String(creative.thumbnail_url) : undefined,
     });
   }
 
+  // 3) object_story_spec (draft/spec path)
   const oss = creative?.object_story_spec || {};
   const linkData = oss?.link_data || {};
+  const videoData = oss?.video_data || {};
+  if (videoData?.video_id) {
+    pushVideo(
+      String(videoData.video_id),
+      videoData?.image_url || creative?.thumbnail_url,
+      videoData?.title
+    );
+  }
   if (linkData?.image_hash && hashMap.get(String(linkData.image_hash))) {
     push({
       type: Array.isArray(linkData.child_attachments) ? "carousel" : "image",
@@ -172,13 +275,14 @@ function extractAssets(creative: any, hashMap: Map<string, string>): CreativeAss
       const url = child?.image_hash ? hashMap.get(String(child.image_hash)) : undefined;
       push({
         type: "carousel",
-        url,
+        url: url || child?.picture,
         thumbnailUrl: child?.picture,
         name: child?.name,
       });
     }
   }
 
+  // 4) Dynamic creative asset feed
   const afs = creative?.asset_feed_spec || {};
   if (Array.isArray(afs.images)) {
     for (const img of afs.images) {
@@ -188,54 +292,69 @@ function extractAssets(creative: any, hashMap: Map<string, string>): CreativeAss
   }
   if (Array.isArray(afs.videos)) {
     for (const vid of afs.videos) {
-      push({
-        type: "video",
-        thumbnailUrl: vid?.thumbnail_url || creative?.thumbnail_url,
-        name: vid?.video_id ? `Video ${vid.video_id}` : "Video",
-      });
+      pushVideo(vid?.video_id, vid?.thumbnail_url || creative?.thumbnail_url);
     }
   }
 
+  // 5) Top-level video_id / thumbnail fallback
+  if (creative?.video_id) {
+    pushVideo(String(creative.video_id), creative?.thumbnail_url);
+  }
   if (!assets.length && creative?.thumbnail_url) {
     push({
       type: creative?.video_id || afs?.videos?.length ? "video" : "image",
       thumbnailUrl: String(creative.thumbnail_url),
-      url: creative.image_url ? String(creative.image_url) : undefined,
+      url: creative.image_url ? String(creative.image_url) : String(creative.thumbnail_url),
     });
   }
 
   return assets;
 }
 
-function extractCopy(creative: any) {
+function extractCopy(
+  creative: any,
+  extras?: {
+    post?: any;
+  }
+) {
   const oss = creative?.object_story_spec || {};
   const linkData = oss?.link_data || {};
   const videoData = oss?.video_data || {};
   const afs = creative?.asset_feed_spec || {};
+  const post = extras?.post || {};
+  const postAttachments = post?.attachments?.data || [];
+  const firstAtt = postAttachments[0] || {};
+
   const primaryText =
     creative?.body ||
+    post?.message ||
     linkData?.message ||
     videoData?.message ||
     firstText(afs?.bodies) ||
     undefined;
   const headline =
     creative?.title ||
+    firstAtt?.title ||
     linkData?.name ||
     videoData?.title ||
     firstText(afs?.titles) ||
     undefined;
   const description =
+    firstAtt?.description ||
     linkData?.description ||
     videoData?.link_description ||
     firstText(afs?.descriptions) ||
     undefined;
   const cta =
     creative?.call_to_action_type ||
+    firstAtt?.call_to_action?.type ||
     linkData?.call_to_action?.type ||
     videoData?.call_to_action?.type ||
     (Array.isArray(afs?.call_to_action_types) ? afs.call_to_action_types[0] : undefined);
   const linkUrl =
     creative?.link_url ||
+    firstAtt?.url ||
+    firstAtt?.unshimmed_url ||
     linkData?.link ||
     videoData?.call_to_action?.value?.link ||
     afs?.link_urls?.[0]?.website_url ||
@@ -243,6 +362,7 @@ function extractCopy(creative: any) {
     undefined;
   const pageId =
     oss?.page_id ||
+    post?.from?.id ||
     creative?.actor_id ||
     creative?.object_id ||
     undefined;
@@ -254,6 +374,59 @@ function extractCopy(creative: any) {
     linkUrl: linkUrl ? String(linkUrl) : undefined,
     pageId: pageId ? String(pageId) : undefined,
   };
+}
+
+async function resolvePublishedPosts(storyIds: string[]) {
+  const unique = [...new Set(storyIds.filter(Boolean))];
+  const map = new Map<string, any>();
+  await Promise.all(
+    unique.map(async (id) => {
+      try {
+        // effective_object_story_id is usually pageId_postId
+        const post = await graph(`/${id}`, {
+          fields:
+            "id,message,full_picture,permalink_url,from{id,name,picture.width(200).height(200)},attachments{title,description,unshimmed_url,url,type,media{image{src},source},target{id},media_type,subattachments{data{title,description,type,url,media{image{src},source},target{id}}}}",
+        });
+        map.set(id, post);
+      } catch {
+        // Post lookup is best-effort; dynamic creatives / restricted posts may fail.
+      }
+    })
+  );
+  return map;
+}
+
+async function resolveVideos(videoIds: string[]) {
+  const unique = [...new Set(videoIds.filter(Boolean))];
+  const map = new Map<string, any>();
+  await Promise.all(
+    unique.map(async (id) => {
+      try {
+        const video = await graph(`/${id}`, {
+          fields:
+            "id,title,picture,source,length,thumbnails.limit(3){uri,is_preferred,width,height}",
+        });
+        map.set(id, video);
+      } catch {
+        // Video source may require pages_read_engagement / ads rights.
+      }
+    })
+  );
+  return map;
+}
+
+function collectVideoIds(creative: any): string[] {
+  const ids: string[] = [];
+  if (creative?.video_id) ids.push(String(creative.video_id));
+  const oss = creative?.object_story_spec || {};
+  if (oss?.video_data?.video_id) ids.push(String(oss.video_data.video_id));
+  const afs = creative?.asset_feed_spec || {};
+  if (Array.isArray(afs.videos)) {
+    for (const vid of afs.videos) {
+      if (vid?.video_id) ids.push(String(vid.video_id));
+    }
+  }
+  return ids;
 }
 
 async function resolvePageProfiles(pageIds: string[]) {
@@ -367,7 +540,7 @@ export async function fetchMetaCampaignDetail(opts: {
 
   const adsJson = await graph(`/${opts.campaignId}/ads`, {
     fields:
-      "id,name,status,effective_status,creative{id,name,title,body,image_url,thumbnail_url,object_type,object_story_spec,asset_feed_spec,video_id,image_hash,link_url,call_to_action_type,actor_id,object_id}",
+      "id,name,status,effective_status,creative{id,name,title,body,image_url,thumbnail_url,object_type,object_story_spec,asset_feed_spec,video_id,image_hash,link_url,call_to_action_type,actor_id,object_id,effective_object_story_id,effective_instagram_media_id}",
     limit: "50",
   });
 
@@ -396,15 +569,39 @@ export async function fetchMetaCampaignDetail(opts: {
     notes.push(`Creative images: ${e.message || "hash resolve failed"}`);
   }
 
+  // AgencyAnalytics-style: resolve published post + video objects for real assets.
+  const storyIds = creatives
+    .map((c: any) => c?.effective_object_story_id)
+    .filter(Boolean)
+    .map(String);
+  const videoIds = creatives.flatMap((c: any) => collectVideoIds(c));
+  const [postMap, videoMap] = await Promise.all([
+    resolvePublishedPosts(storyIds),
+    resolveVideos(videoIds),
+  ]);
+
   const pageIds = (adsJson.data || [])
-    .map((ad: any) => extractCopy(ad.creative || {}).pageId)
+    .map((ad: any) => {
+      const creative = ad.creative || {};
+      const post = creative.effective_object_story_id
+        ? postMap.get(String(creative.effective_object_story_id))
+        : undefined;
+      return extractCopy(creative, { post }).pageId;
+    })
     .filter(Boolean) as string[];
   const pageMap = await resolvePageProfiles(pageIds);
 
   const ads: AdCreativeRow[] = (adsJson.data || []).map((ad: any) => {
     const creative = ad.creative || {};
-    const copy = extractCopy(creative);
-    const assets = extractAssets(creative, hashMap);
+    const post = creative.effective_object_story_id
+      ? postMap.get(String(creative.effective_object_story_id))
+      : undefined;
+    const copy = extractCopy(creative, { post });
+    const assets = extractAssets(creative, hashMap, {
+      post,
+      videos: videoMap,
+    });
+    const pageFromPost = post?.from;
     const page = copy.pageId ? pageMap.get(copy.pageId) : undefined;
     return {
       id: String(ad.id),
@@ -415,8 +612,11 @@ export async function fetchMetaCampaignDetail(opts: {
       description: copy.description,
       cta: copy.cta,
       linkUrl: copy.linkUrl,
-      pageName: page?.name,
-      pagePictureUrl: page?.pictureUrl,
+      pageName: page?.name || pageFromPost?.name || undefined,
+      pagePictureUrl:
+        page?.pictureUrl ||
+        pageFromPost?.picture?.data?.url ||
+        undefined,
       metrics: metricsByAd.get(String(ad.id)) || emptyMetrics(),
       assets,
     };

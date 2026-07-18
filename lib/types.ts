@@ -34,8 +34,11 @@ export type CampaignRow = {
 
 export type CreativeAsset = {
   type: "image" | "video" | "carousel" | "unknown";
+  /** Best display URL (image full size, or video poster/source). */
   url?: string;
   thumbnailUrl?: string;
+  /** Direct video file URL when Graph returns one. */
+  videoUrl?: string;
   name?: string;
 };
 
