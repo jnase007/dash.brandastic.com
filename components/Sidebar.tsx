@@ -16,16 +16,16 @@ const links = [
 
 const updates = [
   {
-    title: "Priority Inbox is live",
-    body: "Homepage now opens on what needs attention, not raw tables.",
+    title: "Operator inbox",
+    body: "Live prior-period + coverage flags on Overview.",
   },
   {
-    title: "⌘K command palette",
-    body: "Jump to any client dashboard or branded report instantly.",
+    title: "Google ad review",
+    body: "RSA previews + search terms on campaign pages.",
   },
   {
-    title: "Premium client reports",
-    body: "Deltas, AI recs, and white-label style pages for reviews.",
+    title: "Print / PDF reports",
+    body: "Client report → Print / PDF for meetings.",
   },
 ];
 

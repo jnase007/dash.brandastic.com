@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { AdPreviewCard } from "@/components/AdPreviewCard";
+import { AdReviewFilters } from "@/components/AdReviewFilters";
 import { MetricCard } from "@/components/MetricCard";
 import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -61,8 +61,6 @@ export default async function CampaignDetailPage({
     sp.ad && sortedAds.some((a) => a.id === sp.ad)
       ? sp.ad
       : sortedAds[0]?.id || "";
-  const selected =
-    sortedAds.find((a) => a.id === selectedId) || sortedAds[0] || null;
 
   const baseQs = `range=${encodeURIComponent(range)}&platform=${platform}`;
 
@@ -129,110 +127,14 @@ export default async function CampaignDetailPage({
           </p>
         </div>
       ) : (
-        <div className="aa-review-layout">
-          <section className="aa-review-list card">
-            <div className="card-head-row">
-              <div>
-                <h3>Ads</h3>
-                <p className="muted" style={{ margin: "4px 0 0" }}>
-                  Sorted by spend · click to preview
-                </p>
-              </div>
-              <span className="badge muted">{sortedAds.length}</span>
-            </div>
-            <div className="aa-ad-table-wrap">
-              <table className="table aa-ad-table">
-                <thead>
-                  <tr>
-                    <th>Ad</th>
-                    <th>Status</th>
-                    <th>Spend</th>
-                    <th>Clicks</th>
-                    <th>CTR</th>
-                    <th>Conv.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedAds.map((ad) => {
-                    const href = `?${baseQs}&ad=${encodeURIComponent(ad.id)}`;
-                    const active = ad.id === selectedId;
-                    const isVideo = Boolean(
-                      ad.assets.some((a) => a.videoUrl || a.type === "video")
-                    );
-                    return (
-                      <tr
-                        key={ad.id}
-                        className={`row-clickable ${active ? "row-selected" : ""}`}
-                      >
-                        <td>
-                          <Link href={href} scroll={false} className="campaign-link">
-                            <div className="client-name">{ad.name}</div>
-                            <div className="client-meta">
-                              {isVideo ? "Video" : "Image"}
-                              {ad.cta ? ` · ${ad.cta}` : ""}
-                            </div>
-                          </Link>
-                        </td>
-                        <td>
-                          <Link href={href} scroll={false} className="muted">
-                            {ad.status}
-                          </Link>
-                        </td>
-                        <td className="mono">
-                          <Link href={href} scroll={false}>
-                            {money(ad.metrics.spend)}
-                          </Link>
-                        </td>
-                        <td className="mono">
-                          <Link href={href} scroll={false}>
-                            {num(ad.metrics.clicks)}
-                          </Link>
-                        </td>
-                        <td className="mono">
-                          <Link href={href} scroll={false}>
-                            {pct(ad.metrics.ctr)}
-                          </Link>
-                        </td>
-                        <td className="mono">
-                          <Link href={href} scroll={false}>
-                            {num(ad.metrics.conversions)}
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="aa-review-preview">
-            <div className="card-head-row" style={{ marginBottom: 10 }}>
-              <div>
-                <div className="eyebrow">Live preview</div>
-                <h3 style={{ margin: 0 }}>
-                  {selected?.name || "Select an ad"}
-                </h3>
-              </div>
-              {selected ? (
-                <span className="badge blue">{money(selected.metrics.spend)}</span>
-              ) : null}
-            </div>
-            {selected ? (
-              <AdPreviewCard
-                ad={selected}
-                clientSlug={data.clientSlug}
-                clientName={data.clientName}
-                logoUrl={logoUrl}
-                selected
-              />
-            ) : (
-              <div className="card">
-                <p className="muted">Select an ad from the table.</p>
-              </div>
-            )}
-          </section>
-        </div>
+        <AdReviewFilters
+          ads={sortedAds}
+          selectedId={selectedId}
+          baseQs={baseQs}
+          clientSlug={data.clientSlug}
+          clientName={data.clientName}
+          logoUrl={logoUrl}
+        />
       )}
 
       {data.searchTerms?.length ? (

@@ -123,6 +123,54 @@ export default async function ClientSeoPage({
         </div>
       </div>
 
+      {(() => {
+        const movers = [...seo.organicKeywords]
+          .filter((k) => k.positionDifference != null && k.positionDifference !== 0)
+          .sort(
+            (a, b) =>
+              Math.abs(b.positionDifference || 0) -
+              Math.abs(a.positionDifference || 0)
+          )
+          .slice(0, 8);
+        if (!movers.length) return null;
+        return (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-head-row">
+              <div>
+                <h3>Keyword movers</h3>
+                <p className="muted" style={{ margin: "4px 0 0" }}>
+                  Biggest position changes in this Semrush snapshot
+                </p>
+              </div>
+              <span className="badge muted">{movers.length}</span>
+            </div>
+            <div className="seo-movers" style={{ marginTop: 12 }}>
+              {movers.map((k) => {
+                const d = k.positionDifference || 0;
+                // Semrush Pd: positive often means improved rank (moved up).
+                const up = d > 0;
+                return (
+                  <div key={`m-${k.keyword}-${k.url || ""}`} className="seo-mover-row">
+                    <div>
+                      <div className="client-name">{k.keyword}</div>
+                      <div className="client-meta">
+                        Pos {num(k.position)}
+                        {k.previousPosition != null
+                          ? ` · was ${num(k.previousPosition)}`
+                          : ""}
+                      </div>
+                    </div>
+                    <span className={`badge ${up ? "ok" : "danger"}`}>
+                      {up ? `+${d}` : d}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="card">
         <div className="card-head-row">
           <div>

@@ -19,6 +19,7 @@ import {
   previousRangeLabel,
   ratio,
 } from "@/lib/format";
+import { buildOperatorInbox } from "@/lib/inbox";
 import { getPortfolioInsights } from "@/lib/insights";
 import { getClientLogoMap } from "@/lib/logos";
 
@@ -44,6 +45,7 @@ export default async function OverviewPage({
   const insights = ai.insights;
   const priority = insights.filter((i) => i.severity === "high" || i.severity === "medium").slice(0, 6);
   const wins = insights.filter((i) => i.severity === "positive").slice(0, 3);
+  const operatorInbox = buildOperatorInbox(data, { limit: 8 });
   const logos = await getClientLogoMap(data.clients.map((c) => c.client.slug));
 
   const ranked = [...data.clients]
@@ -155,6 +157,33 @@ export default async function OverviewPage({
         />
       </div>
 
+      <div className="card premium-panel" style={{ marginBottom: 16 }}>
+        <div className="panel-head">
+          <div>
+            <div className="eyebrow">Live signals · prior-period + coverage</div>
+            <h3>Operator inbox</h3>
+          </div>
+          <span className="badge muted">{operatorInbox.length}</span>
+        </div>
+        {operatorInbox.length ? (
+          <div className="operator-inbox">
+            {operatorInbox.map((item) => (
+              <Link key={item.id} href={item.href} className={`operator-item sev-${item.severity}`}>
+                <div className="operator-item-top">
+                  <strong>{item.title}</strong>
+                  {item.metric ? <span className="badge muted">{item.metric}</span> : null}
+                </div>
+                <div className="muted" style={{ fontSize: 13 }}>
+                  {item.body}
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">No operator flags in this range.</p>
+        )}
+      </div>
+
       <div className="grid two" style={{ marginBottom: 16 }}>
         <div className="card premium-panel">
           <div className="panel-head">
@@ -162,7 +191,7 @@ export default async function OverviewPage({
               <div className="eyebrow">
                 Needs attention · {ai.engine === "xai" ? "xAI Grok" : "rules"}
               </div>
-              <h3>Priority inbox</h3>
+              <h3>AI priority</h3>
             </div>
             <Link href="/insights" className="btn ghost">
               View all

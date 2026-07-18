@@ -2494,3 +2494,133 @@ code {
   line-height: 1.45;
   color: #4b5563;
 }
+
+/* —— Operator inbox —— */
+.operator-inbox {
+  display: grid;
+  gap: 8px;
+}
+.operator-item {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.operator-item:hover {
+  border-color: rgba(6, 68, 237, 0.35);
+  background: #f8fafc;
+}
+.operator-item-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.operator-item.sev-high {
+  border-left: 3px solid var(--danger);
+}
+.operator-item.sev-medium {
+  border-left: 3px solid #f59e0b;
+}
+.operator-item.sev-positive {
+  border-left: 3px solid var(--ok);
+}
+.operator-item.sev-info {
+  border-left: 3px solid #38bdf8;
+}
+
+/* —— AA filters —— */
+.aa-filters {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+@media (max-width: 900px) {
+  .aa-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.aa-filter-input,
+.aa-filter-select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  background: #fff;
+  color: inherit;
+}
+
+/* —— SEO movers —— */
+.seo-movers {
+  display: grid;
+  gap: 8px;
+}
+.seo-mover-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+/* —— Print / PDF —— */
+.print-only {
+  display: none;
+}
+@media print {
+  .sidebar,
+  .top-chrome,
+  .no-print,
+  .nav,
+  .updates,
+  .team-stack,
+  .command-palette,
+  .range-select,
+  .btn,
+  button {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  .shell,
+  .main,
+  .content {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+  .card,
+  .premium-panel,
+  .notice {
+    break-inside: avoid;
+    box-shadow: none !important;
+  }
+  .print-report-banner {
+    display: flex !important;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #0b1220;
+    font-size: 13px;
+  }
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+}

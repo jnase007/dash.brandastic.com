@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { ClientBrandHeader } from "@/components/ClientBrandHeader";
 import { InsightList } from "@/components/InsightList";
 import { MetricCard } from "@/components/MetricCard";
+import { PrintButton } from "@/components/PrintButton";
 import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getClient } from "@/lib/clients";
@@ -58,15 +59,26 @@ export default async function ClientReportPage({
             rangeLabel={compactRangeLabel(range)}
           />
         </div>
-        <div className="top-actions">
+        <div className="top-actions no-print">
           <StatusBadge status={data.source} />
           <Suspense fallback={null}>
             <RangeSelect value={range} />
           </Suspense>
+          <PrintButton />
           <Link className="btn ghost" href={`/clients/${slug}?range=${range}`}>
             Dashboard view
           </Link>
         </div>
+      </div>
+
+      <div className="print-only print-report-banner">
+        <strong>Brandastic · {data.client.name}</strong>
+        <span>
+          {compactRangeLabel(range)} · generated{" "}
+          {new Date().toLocaleString("en-US", {
+            timeZone: "America/Los_Angeles",
+          })}
+        </span>
       </div>
 
       <div className="report-channel-tabs">
