@@ -121,9 +121,9 @@ export default async function CampaignDetailPage({
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-head-row">
           <div>
-            <h3>Ads in this campaign</h3>
+            <h3>Ad previews</h3>
             <p className="muted" style={{ margin: "4px 0 0" }}>
-              Facebook-style feed previews with live creative + performance.
+              AgencyAnalytics-style Facebook previews with live creative + metrics.
             </p>
           </div>
           <span className="badge muted">{data.ads.length} ads</span>
@@ -140,6 +140,8 @@ export default async function CampaignDetailPage({
               const preview = hero?.url || hero?.thumbnailUrl;
               const ctaLabel = formatCta(ad.cta);
               const domain = displayDomain(ad.linkUrl);
+              const pageLabel = ad.pageName || data.clientName;
+              const avatarUrl = ad.pagePictureUrl || logoUrl;
               const carouselAssets = ad.assets
                 .map((asset) => asset.url || asset.thumbnailUrl)
                 .filter(Boolean) as string[];
@@ -147,9 +149,10 @@ export default async function CampaignDetailPage({
                 hero?.type === "carousel" || carouselAssets.length > 1;
 
               return (
-                <article key={ad.id} className="ad-creative-card fb-ad-wrap">
-                  <div className="fb-ad-meta-bar">
+                <article key={ad.id} className="ad-preview-card">
+                  <div className="ad-preview-head">
                     <div>
+                      <div className="ad-preview-kicker">Ad preview</div>
                       <strong className="fb-ad-internal-name">{ad.name}</strong>
                       <div className="muted" style={{ fontSize: 12 }}>
                         {ad.status}
@@ -162,27 +165,30 @@ export default async function CampaignDetailPage({
                     </div>
                   </div>
 
-                  <div className="fb-ad">
+                  <div className="fb-ad aa-style">
                     <header className="fb-ad-header">
                       <div
                         className="fb-ad-avatar"
                         style={{
-                          background: logoUrl ? "#fff" : brand.accent,
+                          background: avatarUrl ? "#fff" : brand.accent,
                           borderColor: brand.accentSoft,
                         }}
                       >
-                        {logoUrl ? (
+                        {avatarUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={logoUrl} alt="" />
+                          <img src={avatarUrl} alt="" />
                         ) : (
                           <span>{brand.monogram}</span>
                         )}
                       </div>
                       <div className="fb-ad-page">
-                        <div className="fb-ad-page-name">{data.clientName}</div>
-                        <div className="fb-ad-sponsored">
-                          Sponsored · <span aria-hidden>🌐</span>
+                        <div className="fb-ad-page-name">
+                          {pageLabel}
+                          <span className="fb-ad-verified" aria-hidden>
+                            ✓
+                          </span>
                         </div>
+                        <div className="fb-ad-sponsored">Sponsored</div>
                       </div>
                       <div className="fb-ad-more" aria-hidden>
                         ···
@@ -208,7 +214,7 @@ export default async function CampaignDetailPage({
                         ))}
                       </div>
                     ) : (
-                      <div className="fb-ad-media">
+                      <div className="fb-ad-media landscape">
                         {preview ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={preview} alt={ad.headline || ad.name} />
@@ -223,14 +229,12 @@ export default async function CampaignDetailPage({
                       </div>
                     )}
 
-                    <div className="fb-ad-linkbox">
+                    <div className="fb-ad-linkbox stacked">
                       <div className="fb-ad-linkbox-copy">
                         <div className="fb-ad-domain">{domain}</div>
-                        {ad.headline ? (
-                          <div className="fb-ad-headline">{ad.headline}</div>
-                        ) : (
-                          <div className="fb-ad-headline">{ad.name}</div>
-                        )}
+                        <div className="fb-ad-headline">
+                          {ad.headline || ad.name}
+                        </div>
                         {ad.description ? (
                           <div className="fb-ad-desc">{ad.description}</div>
                         ) : null}
@@ -240,19 +244,13 @@ export default async function CampaignDetailPage({
                           href={ad.linkUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="fb-ad-cta"
+                          className="fb-ad-cta primary"
                         >
                           {ctaLabel}
                         </a>
                       ) : (
-                        <span className="fb-ad-cta muted-cta">{ctaLabel}</span>
+                        <span className="fb-ad-cta primary muted-cta">{ctaLabel}</span>
                       )}
-                    </div>
-
-                    <div className="fb-ad-social" aria-hidden>
-                      <span>Like</span>
-                      <span>Comment</span>
-                      <span>Share</span>
                     </div>
                   </div>
 
@@ -262,16 +260,16 @@ export default async function CampaignDetailPage({
                       <strong>{num(ad.metrics.clicks)}</strong>
                     </div>
                     <div>
+                      <span>Impr.</span>
+                      <strong>{num(ad.metrics.impressions)}</strong>
+                    </div>
+                    <div>
                       <span>CTR</span>
                       <strong>{pct(ad.metrics.ctr)}</strong>
                     </div>
                     <div>
                       <span>Conv.</span>
                       <strong>{num(ad.metrics.conversions)}</strong>
-                    </div>
-                    <div>
-                      <span>CPA</span>
-                      <strong>{money(ad.metrics.cpa)}</strong>
                     </div>
                   </div>
                 </article>

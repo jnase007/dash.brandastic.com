@@ -210,30 +210,41 @@ function extractAssets(creative: any, hashMap: Map<string, string>): CreativeAss
 function extractCopy(creative: any) {
   const oss = creative?.object_story_spec || {};
   const linkData = oss?.link_data || {};
+  const videoData = oss?.video_data || {};
   const afs = creative?.asset_feed_spec || {};
   const primaryText =
     creative?.body ||
     linkData?.message ||
+    videoData?.message ||
     firstText(afs?.bodies) ||
     undefined;
   const headline =
     creative?.title ||
     linkData?.name ||
+    videoData?.title ||
     firstText(afs?.titles) ||
     undefined;
   const description =
     linkData?.description ||
+    videoData?.link_description ||
     firstText(afs?.descriptions) ||
     undefined;
   const cta =
     creative?.call_to_action_type ||
     linkData?.call_to_action?.type ||
+    videoData?.call_to_action?.type ||
     (Array.isArray(afs?.call_to_action_types) ? afs.call_to_action_types[0] : undefined);
   const linkUrl =
     creative?.link_url ||
     linkData?.link ||
+    videoData?.call_to_action?.value?.link ||
     afs?.link_urls?.[0]?.website_url ||
     afs?.link_urls?.[0]?.display_url ||
+    undefined;
+  const pageId =
+    oss?.page_id ||
+    creative?.actor_id ||
+    creative?.object_id ||
     undefined;
   return {
     primaryText: primaryText ? String(primaryText) : undefined,
@@ -241,7 +252,31 @@ function extractCopy(creative: any) {
     description: description ? String(description) : undefined,
     cta: cta ? String(cta) : undefined,
     linkUrl: linkUrl ? String(linkUrl) : undefined,
+    pageId: pageId ? String(pageId) : undefined,
   };
+}
+
+async function resolvePageProfiles(pageIds: string[]) {
+  const unique = [...new Set(pageIds.filter(Boolean))];
+  const map = new Map<string, { name?: string; pictureUrl?: string }>();
+  await Promise.all(
+    unique.map(async (id) => {
+      try {
+        const page = await graph(`/${id}`, {
+          fields: "name,picture.width(200).height(200)",
+        });
+        map.set(id, {
+          name: page?.name ? String(page.name) : undefined,
+          pictureUrl: page?.picture?.data?.url
+            ? String(page.picture.data.url)
+            : undefined,
+        });
+      } catch {
+        // Page lookup is best-effort (token may lack pages_read_engagement).
+      }
+    })
+  );
+  return map;
 }
 
 /** Prefer Meta date_preset when it matches Ads Manager; else explicit time_range. */
@@ -332,7 +367,7 @@ export async function fetchMetaCampaignDetail(opts: {
 
   const adsJson = await graph(`/${opts.campaignId}/ads`, {
     fields:
-      "id,name,status,effective_status,creative{id,name,title,body,image_url,thumbnail_url,object_type,object_story_spec,asset_feed_spec,video_id,image_hash,link_url,call_to_action_type}",
+      "id,name,status,effective_status,creative{id,name,title,body,image_url,thumbnail_url,object_type,object_story_spec,asset_feed_spec,video_id,image_hash,link_url,call_to_action_type,actor_id,object_id}",
     limit: "50",
   });
 
@@ -361,10 +396,16 @@ export async function fetchMetaCampaignDetail(opts: {
     notes.push(`Creative images: ${e.message || "hash resolve failed"}`);
   }
 
+  const pageIds = (adsJson.data || [])
+    .map((ad: any) => extractCopy(ad.creative || {}).pageId)
+    .filter(Boolean) as string[];
+  const pageMap = await resolvePageProfiles(pageIds);
+
   const ads: AdCreativeRow[] = (adsJson.data || []).map((ad: any) => {
     const creative = ad.creative || {};
     const copy = extractCopy(creative);
     const assets = extractAssets(creative, hashMap);
+    const page = copy.pageId ? pageMap.get(copy.pageId) : undefined;
     return {
       id: String(ad.id),
       name: ad.name || `Ad ${ad.id}`,
@@ -374,6 +415,8 @@ export async function fetchMetaCampaignDetail(opts: {
       description: copy.description,
       cta: copy.cta,
       linkUrl: copy.linkUrl,
+      pageName: page?.name,
+      pagePictureUrl: page?.pictureUrl,
       metrics: metricsByAd.get(String(ad.id)) || emptyMetrics(),
       assets,
     };

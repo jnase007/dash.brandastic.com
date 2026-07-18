@@ -46,6 +46,9 @@ export type AdCreativeRow = {
   description?: string;
   cta?: string;
   linkUrl?: string;
+  /** Facebook Page name when available (e.g. Equitymd). */
+  pageName?: string;
+  pagePictureUrl?: string;
   metrics: MetricSet;
   assets: CreativeAsset[];
 };
