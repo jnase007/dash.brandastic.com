@@ -12,6 +12,7 @@ const links = [
   { href: "/seo", label: "SEO", icon: "▤" },
   { href: "/meta", label: "Meta Ads", icon: "◈" },
   { href: "/google", label: "Google Ads", icon: "◇" },
+  { href: "/approvals", label: "Approvals", icon: "✓" },
 ];
 
 const updates = [
