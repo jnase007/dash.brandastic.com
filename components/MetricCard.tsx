@@ -20,7 +20,7 @@ export function MetricCard({
   value: string;
   sub?: string;
   delta?: Delta | null;
-  deltaKey?: "spend" | "clicks" | "conversions" | "cpa" | "roas" | "ctr";
+  deltaKey?: "spend" | "impressions" | "clicks" | "conversions" | "cpa" | "roas" | "ctr" | "cpc";
   spark?: number[];
 }) {
   const deltaLabel = formatDelta(delta);

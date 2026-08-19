@@ -18,6 +18,8 @@ const BASE: Item[] = [
   { id: "reports", label: "Client reports", href: "/reports", group: "Navigate" },
   { id: "meta", label: "Meta Ads", href: "/meta", group: "Navigate" },
   { id: "google", label: "Google Ads", href: "/google", group: "Navigate" },
+  { id: "deep", label: "Deep Analysis", href: "/deep-analysis", group: "Navigate" },
+  { id: "compare", label: "Compare", href: "/compare", group: "Navigate" },
 ];
 
 export function CommandPalette({

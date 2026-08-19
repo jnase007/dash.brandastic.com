@@ -5,7 +5,9 @@ import type {
   CreativeAsset,
   MetricSet,
 } from "./types";
+import { resolveResultCount } from "./deep-analysis/metrics";
 import { datePreset } from "./format";
+import { readJsonResponse } from "./http-json";
 import { proxiedMediaUrl } from "./media-proxy";
 
 const API_VERSION = process.env.META_API_VERSION || "v21.0";
@@ -23,7 +25,7 @@ async function graph(path: string, params: Record<string, string> = {}) {
   url.searchParams.set("access_token", token);
 
   const res = await fetch(url.toString(), { next: { revalidate: 300 } });
-  const json = await res.json();
+  const json = await readJsonResponse(res, "Meta Graph");
   if (!res.ok || json.error) {
     throw new Error(json?.error?.message || `Meta API ${res.status}`);
   }
@@ -558,6 +560,63 @@ export async function fetchMetaAccountInsights(accountId: string, range: string)
   }));
 
   return { metrics: accountMetrics, campaigns: campaignRows };
+}
+
+/** READ ONLY: daily Meta account series for Deep Analysis. */
+export type MetaDailyRow = {
+  date: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  results: number;
+  revenue: number;
+  reach: number | null;
+  matchedType: string | null;
+};
+
+export async function fetchMetaDailyInsights(
+  accountId: string,
+  range: string,
+  resultGroup = "purchases"
+): Promise<MetaDailyRow[]> {
+  const act = accountId.startsWith("act_") ? accountId : `act_${accountId}`;
+  const timeParams = metaTimeParams(range);
+  const json = await graph(`/${act}/insights`, {
+    fields: "spend,impressions,clicks,reach,actions,action_values",
+    ...timeParams,
+    level: "account",
+    time_increment: "1",
+    limit: "500",
+  });
+  return (json.data || []).map((row: any) => {
+    const spend = Number(row?.spend || 0);
+    const impressions = Number(row?.impressions || 0);
+    const clicks = Number(row?.clicks || 0);
+    const byType: Record<string, { value: number; value_amount: number | null }> = {};
+    for (const a of row?.actions || []) {
+      const type = String(a.action_type || "");
+      if (!type) continue;
+      byType[type] = byType[type] || { value: 0, value_amount: null };
+      byType[type].value += Number(a.value || 0);
+    }
+    for (const a of row?.action_values || []) {
+      const type = String(a.action_type || "");
+      if (!type) continue;
+      byType[type] = byType[type] || { value: 0, value_amount: 0 };
+      byType[type].value_amount = (byType[type].value_amount || 0) + Number(a.value || 0);
+    }
+    const resolved = resolveResultCount(byType, resultGroup);
+    return {
+      date: String(row?.date_start || ""),
+      spend,
+      impressions,
+      clicks,
+      results: resolved.count,
+      revenue: resolved.revenue,
+      reach: row?.reach != null ? Number(row.reach) : null,
+      matchedType: resolved.matchedType,
+    };
+  }).filter((row: { date: string }) => Boolean(row.date));
 }
 
 /** READ ONLY campaign + ads + creative previews for one Meta campaign. */

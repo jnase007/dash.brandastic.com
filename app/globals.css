@@ -1115,6 +1115,14 @@ code {
   color: var(--muted);
 }
 
+.ok {
+  color: var(--ok);
+}
+
+.warn {
+  color: var(--warn);
+}
+
 .mono {
   font-variant-numeric: tabular-nums;
 }

@@ -55,20 +55,24 @@ export function metricDeltas(current: MetricSet, previous: MetricSet | null | un
   if (!previous) {
     return {
       spend: delta(null, null),
+      impressions: delta(null, null),
       clicks: delta(null, null),
       conversions: delta(null, null),
       cpa: delta(null, null),
       roas: delta(null, null),
       ctr: delta(null, null),
+      cpc: delta(null, null),
     };
   }
   return {
     spend: delta(current.spend, previous.spend),
+    impressions: delta(current.impressions, previous.impressions),
     clicks: delta(current.clicks, previous.clicks),
     conversions: delta(current.conversions, previous.conversions),
     cpa: delta(current.cpa, previous.cpa),
     roas: delta(current.roas, previous.roas),
     ctr: delta(current.ctr, previous.ctr),
+    cpc: delta(current.cpc, previous.cpc),
   };
 }
 
@@ -87,10 +91,10 @@ export function sparkFromPair(
 
 /** For cost metrics, down is good. For volume/ROAS, up is good. */
 export function isHealthyDelta(
-  key: "spend" | "clicks" | "conversions" | "cpa" | "roas" | "ctr",
+  key: "spend" | "impressions" | "clicks" | "conversions" | "cpa" | "roas" | "ctr" | "cpc",
   direction: Delta["direction"]
 ) {
   if (direction === "flat" || direction === "na") return null;
-  if (key === "cpa" || key === "spend") return direction === "down";
+  if (key === "cpa" || key === "cpc" || key === "spend") return direction === "down";
   return direction === "up";
 }

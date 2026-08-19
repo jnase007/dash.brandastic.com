@@ -12,13 +12,15 @@ const links = [
   { href: "/seo", label: "SEO", icon: "▤" },
   { href: "/meta", label: "Meta Ads", icon: "◈" },
   { href: "/google", label: "Google Ads", icon: "◇" },
+  { href: "/deep-analysis", label: "Deep Analysis", icon: "▣" },
+  { href: "/compare", label: "Compare", icon: "⇄" },
   { href: "/approvals", label: "Approvals", icon: "✓" },
 ];
 
 const updates = [
   {
-    title: "Operator inbox",
-    body: "Live prior-period + coverage flags on Overview.",
+    title: "Compare + Deep Analysis",
+    body: "Live Meta/Google windows. No warehouse.",
   },
   {
     title: "Google ad review",
@@ -70,7 +72,7 @@ export function Sidebar() {
 
       <div className="nav-label">Team</div>
       <div className="team-stack">
-        {TEAM.slice(0, 5).map((m) => (
+        {TEAM.map((m) => (
           <div key={m.name} className="team-mini">
             <img src={m.image} alt={m.name} />
             <div>

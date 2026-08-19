@@ -18,7 +18,10 @@ function forceDemo() {
   return process.env.FORCE_DEMO_DATA === "true";
 }
 
-export async function getPortfolio(range = "30d"): Promise<PortfolioSummary> {
+export async function getPortfolio(
+  range = "30d",
+  opts: { includePrevious?: boolean } = {}
+): Promise<PortfolioSummary> {
   const metaOk = metaConfigured();
   const googleOk = googleLiveEnabled();
   const googleCredsPresent = googleConfigured();
@@ -45,7 +48,9 @@ export async function getPortfolio(range = "30d"): Promise<PortfolioSummary> {
   // includePrevious so overview deltas are real prior-period, not synthetic.
   const settled = await Promise.allSettled(
     CLIENTS.map((client) =>
-      getClientSummary(client.slug, range, { includePrevious: true })
+      getClientSummary(client.slug, range, {
+        includePrevious: opts.includePrevious ?? true,
+      })
     )
   );
   const clients: ClientSummary[] = settled.map((result, i) => {

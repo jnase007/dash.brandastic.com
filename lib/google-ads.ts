@@ -1,5 +1,6 @@
 import type { CampaignRow, MetricSet } from "./types";
 import { datePreset } from "./format";
+import { readJsonResponse } from "./http-json";
 
 /**
  * Google Ads connector (READ ONLY).
@@ -39,9 +40,9 @@ async function getAccessToken() {
     }),
     cache: "no-store",
   });
-  const json = await res.json();
+  const json = await readJsonResponse(res, "Google OAuth token");
   if (!res.ok || !json.access_token) {
-    throw new Error(json?.error_description || "Google OAuth token refresh failed");
+    throw new Error(json?.error_description || json?.error || "Google OAuth token refresh failed");
   }
   return json.access_token as string;
 }
@@ -95,7 +96,7 @@ export async function fetchGoogleCustomerInsights(customerId: string, range: str
     }
   );
 
-  const json = await res.json();
+  const json = await readJsonResponse(res, "Google Ads searchStream");
   if (!res.ok) {
     throw new Error(json?.error?.message || `Google Ads API ${res.status}`);
   }
@@ -189,6 +190,66 @@ export async function fetchGoogleCustomerInsights(customerId: string, range: str
   return { metrics, campaigns };
 }
 
+/** READ ONLY: daily Google account series for Deep Analysis. */
+export type GoogleDailyRow = {
+  date: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  revenue: number;
+};
+
+export async function fetchGoogleDailyInsights(
+  customerId: string,
+  range: string
+): Promise<GoogleDailyRow[]> {
+  if (!googleConfigured()) throw new Error("Google Ads not configured");
+  const dateClause = googleDateClause(range);
+  const query = `
+    SELECT
+      segments.date,
+      metrics.cost_micros,
+      metrics.impressions,
+      metrics.clicks,
+      metrics.conversions,
+      metrics.conversions_value
+    FROM customer
+    WHERE ${dateClause}
+  `;
+  const rows = await googleSearchStream(customerId, query);
+  const byDate = new Map<
+    string,
+    {
+      date: string;
+      spend: number;
+      impressions: number;
+      clicks: number;
+      conversions: number;
+      revenue: number;
+    }
+  >();
+  for (const r of rows) {
+    const date = String(r.segments?.date || "");
+    if (!date) continue;
+    const existing = byDate.get(date) || {
+      date,
+      spend: 0,
+      impressions: 0,
+      clicks: 0,
+      conversions: 0,
+      revenue: 0,
+    };
+    existing.spend += Number(r.metrics?.costMicros || 0) / 1_000_000;
+    existing.impressions += Number(r.metrics?.impressions || 0);
+    existing.clicks += Number(r.metrics?.clicks || 0);
+    existing.conversions += Number(r.metrics?.conversions || 0);
+    existing.revenue += Number(r.metrics?.conversionsValue || 0);
+    byDate.set(date, existing);
+  }
+  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
 /** READ ONLY: list Google Ads customer IDs visible to the OAuth user. */
 export async function listGoogleAccessibleCustomers() {
   if (!googleConfigured()) throw new Error("Google Ads not configured");
@@ -205,7 +266,7 @@ export async function listGoogleAccessibleCustomers() {
       cache: "no-store",
     }
   );
-  const json = await res.json();
+  const json = await readJsonResponse(res, "Google Ads customers");
   if (!res.ok) {
     throw new Error(json?.error?.message || `Google Ads API ${res.status}`);
   }
@@ -249,7 +310,7 @@ export async function listGoogleMccClients(mccId?: string) {
       cache: "no-store",
     }
   );
-  const json = await res.json();
+  const json = await readJsonResponse(res, "Google Ads MCC clients");
   if (!res.ok) {
     throw new Error(json?.error?.message || `Google Ads API ${res.status}`);
   }
@@ -296,7 +357,7 @@ async function googleSearchStream(customerId: string, query: string) {
       cache: "no-store",
     }
   );
-  const json = await res.json();
+  const json = await readJsonResponse(res, "Google Ads searchStream");
   if (!res.ok) {
     throw new Error(json?.error?.message || `Google Ads API ${res.status}`);
   }
@@ -399,7 +460,35 @@ export async function fetchGoogleCampaignDetail(opts: {
   const dateClause = googleDateClause(range);
   const notes: string[] = [];
 
-  // Campaign rollup
+  // Campaign identity (no date filter) so paused/zero-delivery campaigns still resolve name+status.
+  let campName = `Google campaign ${campaignId}`;
+  let campStatus = "UNKNOWN";
+  let channelType = "";
+  try {
+    const identityRows = await googleSearchStream(
+      customerId,
+      `
+      SELECT
+        campaign.id,
+        campaign.name,
+        campaign.status,
+        campaign.advertising_channel_type
+      FROM campaign
+      WHERE campaign.id = ${campaignId}
+      LIMIT 1
+      `
+    );
+    const identity = identityRows[0];
+    if (identity?.campaign) {
+      campName = identity.campaign.name || campName;
+      campStatus = identity.campaign.status || campStatus;
+      channelType = identity.campaign.advertisingChannelType || channelType;
+    }
+  } catch (e: any) {
+    notes.push(`Campaign identity: ${e?.message || "lookup failed"}`);
+  }
+
+  // Campaign rollup for the selected range
   const campRows = await googleSearchStream(
     customerId,
     `
@@ -424,9 +513,6 @@ export async function fetchGoogleCampaignDetail(opts: {
   let campClicks = 0;
   let campConv = 0;
   let campValue = 0;
-  let campName = `Google campaign ${campaignId}`;
-  let campStatus = "UNKNOWN";
-  let channelType = "";
   for (const r of campRows) {
     campName = r.campaign?.name || campName;
     campStatus = r.campaign?.status || campStatus;
