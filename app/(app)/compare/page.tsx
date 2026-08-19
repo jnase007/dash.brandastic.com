@@ -9,7 +9,7 @@ import {
   compareWindowSet,
   resolveCompareCurrent,
 } from "@/lib/compare-windows";
-import { compactRangeLabel, formatDateTimePT } from "@/lib/format";
+import { compactRangeLabel } from "@/lib/format";
 import {
   METRIC_COLUMNS,
   formatMetricCell,
@@ -128,7 +128,7 @@ export default async function ComparePage({
           </tbody>
         </table>
         <p className="muted" style={{ marginTop: 12 }}>
-          Generated {formatDateTimePT(board.generatedAt)}. Windows:{" "}
+          Generated {new Date(board.generatedAt).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })} PT. Windows:{" "}
           {board.windows.map((w) => `${w.short} ${w.label}`).join(" · ")}.
         </p>
       </div>
