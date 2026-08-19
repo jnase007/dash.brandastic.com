@@ -7,7 +7,7 @@ import { readJsonResponse } from "./http-json";
  * Uses REST searchStream once developer token + OAuth refresh are present.
  * Without credentials, callers should fall back to demo mode.
  */
-const GOOGLE_ADS_API_VERSION = process.env.GOOGLE_ADS_API_VERSION || "v21";
+const GOOGLE_ADS_API_VERSION = process.env.GOOGLE_ADS_API_VERSION || "v25";
 
 export function googleConfigured() {
   return Boolean(
