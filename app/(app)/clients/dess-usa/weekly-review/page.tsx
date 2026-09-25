@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DessWeeklyReviewBoard } from "@/components/DessWeeklyReviewBoard";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default function DessWeeklyReviewPage() {
   return (
