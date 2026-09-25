@@ -48,6 +48,17 @@ export function CommandPalette({
         href: `/reports/${c.slug}`,
         group: "Reports",
       },
+      ...(c.slug === "dess-usa"
+        ? [
+            {
+              id: "dess-weekly",
+              label: "DESS weekly review",
+              hint: "August Google campaign review",
+              href: "/clients/dess-usa/weekly-review",
+              group: "Reports",
+            },
+          ]
+        : []),
     ]);
     const all = [...BASE, ...clientItems];
     const query = q.trim().toLowerCase();

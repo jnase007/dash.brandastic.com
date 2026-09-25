@@ -46,6 +46,11 @@ export default async function ClientDetailPage({
           <Suspense fallback={null}>
             <RangeSelect value={range} />
           </Suspense>
+          {slug === "dess-usa" ? (
+            <Link className="btn primary" href="/clients/dess-usa/weekly-review">
+              August weekly review
+            </Link>
+          ) : null}
         </div>
       </div>
 
@@ -55,6 +60,24 @@ export default async function ClientDetailPage({
             <div key={n}>{n}</div>
           ))}
         </div>
+      ) : null}
+
+      {slug === "dess-usa" ? (
+        <Link
+          href="/clients/dess-usa/weekly-review"
+          className="card"
+          style={{ display: "block", marginBottom: 16, textDecoration: "none", color: "inherit" }}
+        >
+          <div className="card-head-row">
+            <div>
+              <h3>August weekly review</h3>
+              <p className="muted" style={{ margin: "4px 0 0" }}>
+                Google campaign performance for the DESS weekly meeting. Fast, interactive, ready to present.
+              </p>
+            </div>
+            <span className="btn primary small">Open review</span>
+          </div>
+        </Link>
       ) : null}
 
       <div className="grid metrics" style={{ marginBottom: 16 }}>
