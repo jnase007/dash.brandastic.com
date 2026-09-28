@@ -65,6 +65,7 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
   const [hideZero, setHideZero] = useState(true);
   const [accountCompare, setAccountCompare] = useState<Compare>("mom");
   const [campaignCompare, setCampaignCompare] = useState<Record<string, Compare>>({});
+  const [campaignView, setCampaignView] = useState<Record<string, "table" | "line">>({});
 
   const compareFor = (name: string): Compare => campaignCompare[name] || "mom";
 
@@ -154,37 +155,6 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
         />
       </section>
 
-      <section className={styles.mix}>
-        <div className={styles.card}>
-          <div className={styles.cardHead}>
-            <h3>Spend mix</h3>
-            <span>{liveCampaigns.length} live campaigns</span>
-          </div>
-          <MixBars
-            rows={liveCampaigns}
-            value={(c) => c.mtd.cost}
-            max={maxCost}
-            format={(n) => money(n)}
-            open={open}
-            onOpen={setOpen}
-          />
-        </div>
-        <div className={styles.card}>
-          <div className={styles.cardHead}>
-            <h3>Value mix</h3>
-            <span>Current window conversion value</span>
-          </div>
-          <MixBars
-            rows={liveCampaigns}
-            value={(c) => c.mtd.convValue}
-            max={maxValue}
-            format={(n) => money(n)}
-            open={open}
-            onOpen={setOpen}
-          />
-        </div>
-      </section>
-
       <section className={styles.toolbar}>
         <input
           className={styles.search}
@@ -216,7 +186,6 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
           <input type="checkbox" checked={hideZero} onChange={(e) => setHideZero(e.target.checked)} />
           Hide zero-spend
         </label>
-        <CompareToggle value={accountCompare} onChange={setAccountCompare} compact={false} />
       </section>
 
       <section className={styles.list}>
@@ -227,6 +196,7 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
           const change = changeOf(c, compare);
           const r = campaignRoas(c);
           const isOpen = open === c.name;
+          const view = campaignView[c.name] || "table";
           const compareLabel = compare === "yoy" ? data.compareYearLabel : data.compareMonthLabel;
           const compareShort = compare === "yoy" ? "vs last year" : "vs last month";
           return (
@@ -259,54 +229,64 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
                     <Stat label="Clicks" value={int.format(c.mtd.clicks)} change={change.clicks} />
                   </div>
                 </button>
-                <CompareToggle
-                  value={compare}
-                  onChange={(next) => setCampaignCompare((prev) => ({ ...prev, [c.name]: next }))}
-                  compact
-                />
+                <div className={styles.campaignToggles}>
+                  <CompareToggle
+                    value={compare}
+                    onChange={(next) => setCampaignCompare((prev) => ({ ...prev, [c.name]: next }))}
+                    compact
+                  />
+                  <ViewToggle
+                    value={view}
+                    onChange={(next) => setCampaignView((prev) => ({ ...prev, [c.name]: next }))}
+                  />
+                </div>
               </div>
               {isOpen ? (
                 <div className={styles.detail}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>
-                        <th></th>
-                        <th>Cost</th>
-                        <th>Impr.</th>
-                        <th>Clicks</th>
-                        <th>CPC</th>
-                        <th>SIS</th>
-                        <th>Conv.</th>
-                        <th>Value</th>
-                        <th>ROAS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className={styles.nowRow}>
-                        <td>Current · {data.periodLabel}</td>
-                        <MetricCells m={c.mtd} />
-                      </tr>
-                      <tr className={styles.priorRow}>
-                        <td>{compareLabel}</td>
-                        <MetricCells m={prior} />
-                      </tr>
-                      <tr className={styles.changeRow}>
-                        <td>{compareShort}</td>
-                        <td className={styles[tone(change.cost, true)]}>{pct(change.cost)}</td>
-                        <td className={styles[tone(change.impressions)]}>{pct(change.impressions)}</td>
-                        <td className={styles[tone(change.clicks)]}>{pct(change.clicks)}</td>
-                        <td className={styles[tone(change.cpc, true)]}>{pct(change.cpc)}</td>
-                        <td className={styles[tone(change.searchImpShare)]}>
-                          {change.searchImpShare == null
-                            ? "—"
-                            : `${change.searchImpShare > 0 ? "+" : change.searchImpShare < 0 ? "−" : ""}${Math.abs(change.searchImpShare * 100).toFixed(1)} pts`}
-                        </td>
-                        <td className={styles[tone(change.conversions ?? null)]}>{pct(change.conversions ?? null)}</td>
-                        <td className={styles[tone(change.convValue)]}>{pct(change.convValue)}</td>
-                        <td className={styles[tone(roasDelta(c.mtd, prior))]}>{pct(roasDelta(c.mtd, prior))}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                  {view === "line" ? (
+                    <CompareLine now={c.mtd} prior={prior} nowLabel={data.periodLabel} priorLabel={compareLabel} />
+                  ) : (
+                    <table className={styles.table}>
+                      <thead>
+                        <tr>
+                          <th></th>
+                          <th>Cost</th>
+                          <th>Clicks</th>
+                          <th>CTR</th>
+                          <th>CPC</th>
+                          <th>Conv.</th>
+                          <th>Value</th>
+                          <th>Conv. rate</th>
+                          <th>ROAS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className={styles.nowRow}>
+                          <td>Current · {data.periodLabel}</td>
+                          <MetricCells m={c.mtd} />
+                        </tr>
+                        <tr className={styles.priorRow}>
+                          <td>{compareLabel}</td>
+                          <MetricCells m={prior} />
+                        </tr>
+                        <tr className={styles.changeRow}>
+                          <td>{compareShort}</td>
+                          <td className={styles[tone(change.cost, true)]}>{pct(change.cost)}</td>
+                          <td className={styles[tone(change.clicks)]}>{pct(change.clicks)}</td>
+                          <td className={styles[tone(rateDelta(ctr(c.mtd), ctr(prior)))]}>
+                            {pct(rateDelta(ctr(c.mtd), ctr(prior)))}
+                          </td>
+                          <td className={styles[tone(change.cpc, true)]}>{pct(change.cpc)}</td>
+                          <td className={styles[tone(change.conversions ?? null)]}>{pct(change.conversions ?? null)}</td>
+                          <td className={styles[tone(change.convValue)]}>{pct(change.convValue)}</td>
+                          <td className={styles[tone(rateDelta(convRate(c.mtd), convRate(prior)))]}>
+                            {pct(rateDelta(convRate(c.mtd), convRate(prior)))}
+                          </td>
+                          <td className={styles[tone(roasDelta(c.mtd, prior))]}>{pct(roasDelta(c.mtd, prior))}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               ) : null}
             </article>
@@ -314,6 +294,125 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
         })}
         {!campaigns.length ? <div className={styles.empty}>No campaigns match that filter.</div> : null}
       </section>
+
+      <section className={styles.mix}>
+        <div className={styles.card}>
+          <div className={styles.cardHead}>
+            <h3>Spend</h3>
+            <span>{liveCampaigns.length} live campaigns</span>
+          </div>
+          <MixBars
+            rows={liveCampaigns}
+            value={(c) => c.mtd.cost}
+            max={maxCost}
+            format={(n) => money(n)}
+            open={open}
+            onOpen={setOpen}
+          />
+        </div>
+        <div className={styles.card}>
+          <div className={styles.cardHead}>
+            <h3>Conversion value</h3>
+            <span>Current window</span>
+          </div>
+          <MixBars
+            rows={liveCampaigns}
+            value={(c) => c.mtd.convValue}
+            max={maxValue}
+            format={(n) => money(n)}
+            open={open}
+            onOpen={setOpen}
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ctr(m: PeriodMetrics) {
+  if (!m.impressions) return null;
+  return m.clicks / m.impressions;
+}
+
+function convRate(m: PeriodMetrics) {
+  if (!m.clicks) return null;
+  return (m.conversions || 0) / m.clicks;
+}
+
+function rateDelta(now: number | null, prior: number | null) {
+  if (now == null || prior == null || prior === 0) return null;
+  return (now - prior) / prior;
+}
+
+function ViewToggle({
+  value,
+  onChange,
+}: {
+  value: "table" | "line";
+  onChange: (next: "table" | "line") => void;
+}) {
+  return (
+    <div className={styles.toggleSmall} role="tablist" aria-label="View">
+      <button type="button" className={value === "table" ? styles.onMom : ""} onClick={() => onChange("table")}>
+        Table
+      </button>
+      <button type="button" className={value === "line" ? styles.on : ""} onClick={() => onChange("line")}>
+        Line
+      </button>
+    </div>
+  );
+}
+
+function CompareLine({
+  now,
+  prior,
+  nowLabel,
+  priorLabel,
+}: {
+  now: PeriodMetrics;
+  prior: PeriodMetrics;
+  nowLabel: string;
+  priorLabel: string;
+}) {
+  const points = [
+    { label: "Cost", a: now.cost, b: prior.cost },
+    { label: "Clicks", a: now.clicks, b: prior.clicks },
+    { label: "CTR", a: ctr(now) || 0, b: ctr(prior) || 0 },
+    { label: "CPC", a: now.cpc, b: prior.cpc },
+    { label: "Conv.", a: now.conversions || 0, b: prior.conversions || 0 },
+    { label: "Value", a: now.convValue, b: prior.convValue },
+    { label: "CR", a: convRate(now) || 0, b: convRate(prior) || 0 },
+    { label: "ROAS", a: roas(now.cost, now.convValue) || 0, b: roas(prior.cost, prior.convValue) || 0 },
+  ];
+  const w = 640;
+  const h = 180;
+  const pad = 28;
+  const innerW = w - pad * 2;
+  const innerH = h - pad * 2;
+  const xs = points.map((_, i) => pad + (i * innerW) / (points.length - 1));
+  const norm = (a: number, b: number, v: number) => {
+    const max = Math.max(a, b, 0.0001);
+    return pad + innerH - (v / max) * innerH;
+  };
+  const path = (key: "a" | "b") =>
+    points
+      .map((p, i) => `${i ? "L" : "M"}${xs[i]},${norm(p.a, p.b, p[key])}`)
+      .join(" ");
+  return (
+    <div className={styles.chartWrap}>
+      <svg viewBox={`0 0 ${w} ${h}`} className={styles.chart} role="img" aria-label="Current vs compare line chart">
+        <path d={path("b")} fill="none" stroke="#94a3b8" strokeWidth="2.5" />
+        <path d={path("a")} fill="none" stroke="#0369a1" strokeWidth="2.5" />
+        {points.map((p, i) => (
+          <text key={p.label} x={xs[i]} y={h - 6} textAnchor="middle" fontSize="10" fill="#667085">
+            {p.label}
+          </text>
+        ))}
+      </svg>
+      <div className={styles.chartLegend}>
+        <span className={styles.legNow}>{nowLabel}</span>
+        <span className={styles.legPrior}>{priorLabel}</span>
+      </div>
     </div>
   );
 }
@@ -348,15 +447,17 @@ function roasDelta(current: PeriodMetrics, prior: PeriodMetrics) {
 
 function MetricCells({ m }: { m: PeriodMetrics }) {
   const r = roas(m.cost, m.convValue);
+  const clickRate = ctr(m);
+  const cr = convRate(m);
   return (
     <>
       <td>{money(m.cost)}</td>
-      <td>{int.format(m.impressions)}</td>
       <td>{int.format(m.clicks)}</td>
+      <td>{clickRate == null ? "—" : `${(clickRate * 100).toFixed(2)}%`}</td>
       <td>{m.cost || m.clicks ? money(m.cpc, 2) : "—"}</td>
-      <td>{m.searchImpShare == null ? "—" : `${m.searchImpShare.toFixed(1)}%`}</td>
       <td>{int.format(m.conversions || 0)}</td>
       <td>{money(m.convValue)}</td>
+      <td>{cr == null ? "—" : `${(cr * 100).toFixed(2)}%`}</td>
       <td>{r == null ? "—" : `${r.toFixed(1)}x`}</td>
     </>
   );
