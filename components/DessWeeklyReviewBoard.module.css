@@ -134,6 +134,15 @@
   padding: 8px 10px 8px 0;
 }
 
+.tvChart {
+  height: 280px;
+  width: 100%;
+}
+
+.rechart {
+  width: 100%;
+}
+
 .chartWrap {
   padding: 8px 4px 0;
 }

@@ -2,6 +2,9 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { RangeSelect } from "@/components/RangeSelect";
+import { DessCompareBars } from "@/components/DessCompareBars";
+import { DessMixChart } from "@/components/DessMixChart";
+import { DessTrendChart } from "@/components/DessTrendChart";
 import { roas, type CampaignReview, type ChangeSet, type PeriodKey, type PeriodMetrics } from "@/lib/dess-weekly-review";
 import type { DessWeeklyLive } from "@/lib/load-dess-weekly-review";
 import styles from "./DessWeeklyReviewBoard.module.css";
@@ -88,8 +91,6 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
     return rows;
   }, [campaignCompare, data.campaigns, hideZero, query, sort]);
 
-  const maxCost = Math.max(...data.campaigns.map((c) => c.mtd.cost), 1);
-  const maxValue = Math.max(...data.campaigns.map((c) => c.mtd.convValue), 1);
   const liveCampaigns = data.campaigns.filter((c) => !c.inactive);
   const accountRoas = data.roas;
   const accountKey: PeriodKey = accountCompare === "yoy" ? "yoy" : "lmtd";
@@ -154,6 +155,8 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
           sub={`${int.format(periodOf(data.totals, accountKey).impressions)} ${accountShort}`}
         />
       </section>
+
+      <DessTrendChart series={data.daily || []} />
 
       <section className={styles.toolbar}>
         <input
@@ -244,7 +247,7 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
               {isOpen ? (
                 <div className={styles.detail}>
                   {view === "line" ? (
-                    <CompareLine now={c.mtd} prior={prior} nowLabel={data.periodLabel} priorLabel={compareLabel} />
+                    <DessCompareBars now={c.mtd} prior={prior} nowLabel={data.periodLabel} priorLabel={compareLabel} />
                   ) : (
                     <table className={styles.table}>
                       <thead>
@@ -301,10 +304,9 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
             <h3>Spend</h3>
             <span>{liveCampaigns.length} live campaigns</span>
           </div>
-          <MixBars
+          <DessMixChart
             rows={liveCampaigns}
             value={(c) => c.mtd.cost}
-            max={maxCost}
             format={(n) => money(n)}
             open={open}
             onOpen={setOpen}
@@ -315,10 +317,9 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
             <h3>Conversion value</h3>
             <span>Current window</span>
           </div>
-          <MixBars
+          <DessMixChart
             rows={liveCampaigns}
             value={(c) => c.mtd.convValue}
-            max={maxValue}
             format={(n) => money(n)}
             open={open}
             onOpen={setOpen}
@@ -357,62 +358,8 @@ function ViewToggle({
         Table
       </button>
       <button type="button" className={value === "line" ? styles.on : ""} onClick={() => onChange("line")}>
-        Line
+        Chart
       </button>
-    </div>
-  );
-}
-
-function CompareLine({
-  now,
-  prior,
-  nowLabel,
-  priorLabel,
-}: {
-  now: PeriodMetrics;
-  prior: PeriodMetrics;
-  nowLabel: string;
-  priorLabel: string;
-}) {
-  const points = [
-    { label: "Cost", a: now.cost, b: prior.cost },
-    { label: "Clicks", a: now.clicks, b: prior.clicks },
-    { label: "CTR", a: ctr(now) || 0, b: ctr(prior) || 0 },
-    { label: "CPC", a: now.cpc, b: prior.cpc },
-    { label: "Conv.", a: now.conversions || 0, b: prior.conversions || 0 },
-    { label: "Value", a: now.convValue, b: prior.convValue },
-    { label: "CR", a: convRate(now) || 0, b: convRate(prior) || 0 },
-    { label: "ROAS", a: roas(now.cost, now.convValue) || 0, b: roas(prior.cost, prior.convValue) || 0 },
-  ];
-  const w = 640;
-  const h = 180;
-  const pad = 28;
-  const innerW = w - pad * 2;
-  const innerH = h - pad * 2;
-  const xs = points.map((_, i) => pad + (i * innerW) / (points.length - 1));
-  const norm = (a: number, b: number, v: number) => {
-    const max = Math.max(a, b, 0.0001);
-    return pad + innerH - (v / max) * innerH;
-  };
-  const path = (key: "a" | "b") =>
-    points
-      .map((p, i) => `${i ? "L" : "M"}${xs[i]},${norm(p.a, p.b, p[key])}`)
-      .join(" ");
-  return (
-    <div className={styles.chartWrap}>
-      <svg viewBox={`0 0 ${w} ${h}`} className={styles.chart} role="img" aria-label="Current vs compare line chart">
-        <path d={path("b")} fill="none" stroke="#94a3b8" strokeWidth="2.5" />
-        <path d={path("a")} fill="none" stroke="#0369a1" strokeWidth="2.5" />
-        {points.map((p, i) => (
-          <text key={p.label} x={xs[i]} y={h - 6} textAnchor="middle" fontSize="10" fill="#667085">
-            {p.label}
-          </text>
-        ))}
-      </svg>
-      <div className={styles.chartLegend}>
-        <span className={styles.legNow}>{nowLabel}</span>
-        <span className={styles.legPrior}>{priorLabel}</span>
-      </div>
     </div>
   );
 }
@@ -510,45 +457,6 @@ function Stat({
       <span>{label}</span>
       <b>{value}</b>
       {change != null ? <em className={styles[tone(change, invert)]}>{pct(change)}</em> : <em className={styles.flat}> </em>}
-    </div>
-  );
-}
-
-function MixBars({
-  rows,
-  value,
-  max,
-  format,
-  open,
-  onOpen,
-}: {
-  rows: CampaignReview[];
-  value: (c: CampaignReview) => number;
-  max: number;
-  format: (n: number) => string;
-  open: string | null;
-  onOpen: (name: string) => void;
-}) {
-  return (
-    <div className={styles.bars}>
-      {rows.map((c) => {
-        const n = value(c);
-        const w = Math.max((n / max) * 100, n > 0 ? 2 : 0);
-        return (
-          <button
-            key={c.name}
-            type="button"
-            className={`${styles.barRow} ${open === c.name ? styles.barOn : ""}`}
-            onClick={() => onOpen(c.name)}
-          >
-            <span className={styles.barName}>{c.name}</span>
-            <span className={styles.barTrack}>
-              <span style={{ width: `${w}%` }} />
-            </span>
-            <span className={styles.barVal}>{format(n)}</span>
-          </button>
-        );
-      })}
     </div>
   );
 }

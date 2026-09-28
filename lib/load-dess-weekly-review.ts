@@ -8,8 +8,10 @@ import {
   type PeriodMetrics,
 } from "./dess-weekly-review";
 import {
+  fetchGoogleDailyInsights,
   fetchGoogleReviewWindow,
   googleLiveEnabled,
+  type GoogleDailyRow,
   type GoogleReviewCampaign,
   type GoogleReviewMetrics,
 } from "./google-ads";
@@ -34,6 +36,7 @@ export type DessWeeklyLive = {
   };
   totals: CampaignReview;
   campaigns: CampaignReview[];
+  daily: GoogleDailyRow[];
 };
 
 function emptyMetrics(): PeriodMetrics {
@@ -119,6 +122,7 @@ function snapshotFallback(range: string, windows: ReturnType<typeof comparePerio
       },
     },
     campaigns,
+    daily: [],
   };
 }
 
@@ -132,10 +136,11 @@ export async function loadDessWeeklyReview(range = "mtd"): Promise<DessWeeklyLiv
   }
 
   try {
-    const [current, mom, yoy] = await Promise.all([
+    const [current, mom, yoy, daily] = await Promise.all([
       fetchGoogleReviewWindow(account, windows.current.range),
       fetchGoogleReviewWindow(account, windows.mom.range),
       fetchGoogleReviewWindow(account, windows.yoy.range),
+      fetchGoogleDailyInsights(account, windows.current.range).catch(() => [] as GoogleDailyRow[]),
     ]);
 
     const momBy = new Map(mom.campaigns.map((c) => [c.id, c]));
@@ -225,6 +230,7 @@ export async function loadDessWeeklyReview(range = "mtd"): Promise<DessWeeklyLiv
         yoyChange: changes(totalsNow, totalsYoy),
       },
       campaigns,
+      daily,
     };
   } catch {
     return snapshotFallback(range, windows);
