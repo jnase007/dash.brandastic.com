@@ -6,6 +6,7 @@ export type PeriodMetrics = {
   clicks: number;
   cpc: number;
   searchImpShare: number | null;
+  conversions?: number;
   convValue: number;
 };
 
@@ -15,6 +16,7 @@ export type ChangeSet = {
   clicks: number | null;
   cpc: number | null;
   searchImpShare: number | null;
+  conversions?: number | null;
   convValue: number | null;
 };
 

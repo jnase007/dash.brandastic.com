@@ -10,6 +10,7 @@ import {
 } from "@/lib/format";
 
 const PRESETS = [
+  { value: "mtd", label: "Month to yesterday" },
   { value: "7d", label: "Last 7 days" },
   { value: "14d", label: "Last 14 days" },
   { value: "30d", label: "Last 30 days" },

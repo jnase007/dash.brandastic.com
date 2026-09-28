@@ -754,3 +754,189 @@ export async function fetchGoogleCampaignDetail(opts: {
     searchTerms,
   };
 }
+
+
+export type GoogleReviewMetrics = {
+  cost: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  convValue: number;
+  searchImpShare: number | null;
+};
+
+export type GoogleReviewCampaign = GoogleReviewMetrics & {
+  id: string;
+  name: string;
+  status: string;
+};
+
+function shareOrNull(value: unknown) {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return n <= 1 ? n * 100 : n;
+}
+
+function reviewFromParts(parts: {
+  cost: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  convValue: number;
+  searchImpShare: number | null;
+}): GoogleReviewMetrics {
+  return {
+    cost: parts.cost,
+    impressions: parts.impressions,
+    clicks: parts.clicks,
+    conversions: parts.conversions,
+    convValue: parts.convValue,
+    searchImpShare: parts.searchImpShare,
+  };
+}
+
+/** READ ONLY: campaign + account metrics for the DESS weekly review. */
+export async function fetchGoogleReviewWindow(customerId: string, range: string) {
+  if (!googleConfigured()) throw new Error("Google Ads not configured");
+  const dateClause = googleDateClause(range);
+  const campaignSelect = `
+      campaign.id,
+      campaign.name,
+      campaign.status,
+      metrics.cost_micros,
+      metrics.impressions,
+      metrics.clicks,
+      metrics.conversions,
+      metrics.conversions_value`;
+  let campRows: GaqlRow[] = [];
+  let hasShare = true;
+  try {
+    campRows = await googleSearchStream(
+      customerId,
+      `
+      SELECT
+        ${campaignSelect},
+        metrics.search_impression_share
+      FROM campaign
+      WHERE ${dateClause}
+        AND campaign.status != 'REMOVED'
+      `
+    );
+  } catch {
+    hasShare = false;
+    campRows = await googleSearchStream(
+      customerId,
+      `
+      SELECT
+        ${campaignSelect}
+      FROM campaign
+      WHERE ${dateClause}
+        AND campaign.status != 'REMOVED'
+      `
+    );
+  }
+
+  const byCampaign = new Map<string, GoogleReviewCampaign>();
+  for (const r of campRows) {
+    const id = String(r.campaign?.id || "unknown");
+    const cost = Number(r.metrics?.costMicros || 0) / 1_000_000;
+    const impressions = Number(r.metrics?.impressions || 0);
+    const clicks = Number(r.metrics?.clicks || 0);
+    const conversions = Number(r.metrics?.conversions || 0);
+    const convValue = Number(r.metrics?.conversionsValue || 0);
+    const searchImpShare = hasShare ? shareOrNull(r.metrics?.searchImpressionShare) : null;
+    const existing = byCampaign.get(id);
+    if (!existing) {
+      byCampaign.set(id, {
+        id,
+        name: r.campaign?.name || "Untitled",
+        status: r.campaign?.status || "UNKNOWN",
+        cost,
+        impressions,
+        clicks,
+        conversions,
+        convValue,
+        searchImpShare,
+      });
+    } else {
+      existing.cost += cost;
+      existing.impressions += impressions;
+      existing.clicks += clicks;
+      existing.conversions += conversions;
+      existing.convValue += convValue;
+      if (existing.searchImpShare == null) existing.searchImpShare = searchImpShare;
+    }
+  }
+
+  let totals = reviewFromParts({
+    cost: 0,
+    impressions: 0,
+    clicks: 0,
+    conversions: 0,
+    convValue: 0,
+    searchImpShare: null,
+  });
+  try {
+    const customerQuery = hasShare
+      ? `
+      SELECT
+        metrics.cost_micros,
+        metrics.impressions,
+        metrics.clicks,
+        metrics.conversions,
+        metrics.conversions_value,
+        metrics.search_impression_share
+      FROM customer
+      WHERE ${dateClause}
+      `
+      : `
+      SELECT
+        metrics.cost_micros,
+        metrics.impressions,
+        metrics.clicks,
+        metrics.conversions,
+        metrics.conversions_value
+      FROM customer
+      WHERE ${dateClause}
+      `;
+    const customerRows = await googleSearchStream(customerId, customerQuery);
+    let cost = 0;
+    let impressions = 0;
+    let clicks = 0;
+    let conversions = 0;
+    let convValue = 0;
+    let searchImpShare: number | null = null;
+    for (const r of customerRows) {
+      cost += Number(r.metrics?.costMicros || 0) / 1_000_000;
+      impressions += Number(r.metrics?.impressions || 0);
+      clicks += Number(r.metrics?.clicks || 0);
+      conversions += Number(r.metrics?.conversions || 0);
+      convValue += Number(r.metrics?.conversionsValue || 0);
+      if (searchImpShare == null) searchImpShare = shareOrNull(r.metrics?.searchImpressionShare);
+    }
+    totals = reviewFromParts({
+      cost,
+      impressions,
+      clicks,
+      conversions,
+      convValue,
+      searchImpShare,
+    });
+  } catch {
+    const campaigns = Array.from(byCampaign.values());
+    totals = reviewFromParts({
+      cost: campaigns.reduce((n, c) => n + c.cost, 0),
+      impressions: campaigns.reduce((n, c) => n + c.impressions, 0),
+      clicks: campaigns.reduce((n, c) => n + c.clicks, 0),
+      conversions: campaigns.reduce((n, c) => n + c.conversions, 0),
+      convValue: campaigns.reduce((n, c) => n + c.convValue, 0),
+      searchImpShare: null,
+    });
+  }
+
+  return {
+    totals,
+    campaigns: Array.from(byCampaign.values()),
+  };
+}

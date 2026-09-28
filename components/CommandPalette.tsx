@@ -53,7 +53,7 @@ export function CommandPalette({
             {
               id: "dess-weekly",
               label: "DESS weekly review",
-              hint: "August Google campaign review",
+              hint: "Google campaign review",
               href: "/clients/dess-usa/weekly-review",
               group: "Reports",
             },

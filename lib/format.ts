@@ -83,7 +83,7 @@ export function parseCustomRange(range: string) {
 
 export function normalizeRange(range?: string | null) {
   if (!range) return "30d";
-  if (["7d", "14d", "30d", "60d", "90d"].includes(range)) return range;
+  if (["7d", "14d", "30d", "60d", "90d", "mtd"].includes(range)) return range;
   const custom = parseCustomRange(range);
   if (!custom) return "30d";
   // ensure since <= until
@@ -100,6 +100,7 @@ export function compactRangeLabel(range: string) {
   if (value === "30d") return "Last 30 days";
   if (value === "60d") return "Last 60 days";
   if (value === "90d") return "Last 90 days";
+  if (value === "mtd") return "Month to yesterday";
   const custom = parseCustomRange(value);
   if (custom) {
     const fmt = (iso: string) => {
@@ -145,6 +146,26 @@ export function datePreset(range: string) {
       googleDuring: null as string | null,
       metaDatePreset: null as string | null,
       endsOn: "custom" as const,
+    };
+  }
+
+  if (value === "mtd") {
+    const until = addIsoDays(todayInDashTz(), -1);
+    const since = `${until.slice(0, 7)}-01`;
+    const start = parseIsoDate(since)!;
+    const end = parseIsoDate(until)!;
+    const days = Math.max(
+      1,
+      Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    );
+    return {
+      since,
+      until,
+      days,
+      preset: "mtd",
+      googleDuring: null as string | null,
+      metaDatePreset: null as string | null,
+      endsOn: "yesterday" as const,
     };
   }
 
@@ -217,4 +238,55 @@ export function previousRangeKey(range: string) {
 export function previousRangeLabel(range: string) {
   const prev = previousRangeKey(range);
   return compactRangeLabel(prev.key);
+}
+
+/** Shift a YYYY-MM-DD by whole months, clamping to the destination month's last day. */
+export function shiftIsoByMonths(iso: string, months: number) {
+  const [year, month, day] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + months, 1));
+  const lastDay = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)
+  ).getUTCDate();
+  date.setUTCDate(Math.min(day, lastDay));
+  return date.toISOString().slice(0, 10);
+}
+
+export function prettyDateLabel(iso: string) {
+  const d = parseIsoDate(iso);
+  if (!d) return iso;
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** Current window plus same dates last month and last year. */
+export function comparePeriodWindows(range = "mtd") {
+  const current = datePreset(range);
+  const momSince = shiftIsoByMonths(current.since, -1);
+  const momUntil = shiftIsoByMonths(current.until, -1);
+  const yoySince = shiftIsoByMonths(current.since, -12);
+  const yoyUntil = shiftIsoByMonths(current.until, -12);
+  return {
+    current: {
+      since: current.since,
+      until: current.until,
+      range: encodeCustomRange(current.since, current.until),
+      label: `${prettyDateLabel(current.since)} – ${prettyDateLabel(current.until)}`,
+    },
+    mom: {
+      since: momSince,
+      until: momUntil,
+      range: encodeCustomRange(momSince, momUntil),
+      label: `${prettyDateLabel(momSince)} – ${prettyDateLabel(momUntil)}`,
+    },
+    yoy: {
+      since: yoySince,
+      until: yoyUntil,
+      range: encodeCustomRange(yoySince, yoyUntil),
+      label: `${prettyDateLabel(yoySince)} – ${prettyDateLabel(yoyUntil)}`,
+    },
+  };
 }

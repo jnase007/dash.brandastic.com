@@ -1,10 +1,19 @@
 import Link from "next/link";
 import { DessWeeklyReviewBoard } from "@/components/DessWeeklyReviewBoard";
+import { loadDessWeeklyReview, rangeOrMtd } from "@/lib/load-dess-weekly-review";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default function DessWeeklyReviewPage() {
+export default async function DessWeeklyReviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string }>;
+}) {
+  const sp = await searchParams;
+  const range = rangeOrMtd(sp.range);
+  const data = await loadDessWeeklyReview(range);
+
   return (
     <div>
       <div className="topbar no-print">
@@ -25,7 +34,7 @@ export default function DessWeeklyReviewPage() {
           </Link>
         </div>
       </div>
-      <DessWeeklyReviewBoard />
+      <DessWeeklyReviewBoard data={data} range={range} />
     </div>
   );
 }

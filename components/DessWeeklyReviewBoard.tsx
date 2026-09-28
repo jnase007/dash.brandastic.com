@@ -1,14 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import {
-  DESS_WEEKLY_REVIEW as DATA,
-  roas,
-  type CampaignReview,
-  type ChangeSet,
-  type PeriodKey,
-  type PeriodMetrics,
-} from "@/lib/dess-weekly-review";
+import { Suspense, useMemo, useState } from "react";
+import { RangeSelect } from "@/components/RangeSelect";
+import { roas, type CampaignReview, type ChangeSet, type PeriodKey, type PeriodMetrics } from "@/lib/dess-weekly-review";
+import type { DessWeeklyLive } from "@/lib/load-dess-weekly-review";
 import styles from "./DessWeeklyReviewBoard.module.css";
 
 type Compare = "yoy" | "mom";
@@ -49,13 +44,13 @@ function tone(n: number | null | undefined, invert = false) {
   return "flat";
 }
 
-function periodOf(c: CampaignReview | typeof DATA.totals, key: PeriodKey): PeriodMetrics {
+function periodOf(c: CampaignReview, key: PeriodKey): PeriodMetrics {
   if (key === "yoy") return c.yoy;
   if (key === "lmtd") return c.lmtd;
   return c.mtd;
 }
 
-function changeOf(c: CampaignReview | typeof DATA.totals, compare: Compare): ChangeSet {
+function changeOf(c: CampaignReview, compare: Compare): ChangeSet {
   return compare === "yoy" ? c.yoyChange : c.momChange;
 }
 
@@ -63,69 +58,57 @@ function campaignRoas(c: CampaignReview) {
   return roas(c.mtd.cost, c.mtd.convValue);
 }
 
-export function DessWeeklyReviewBoard() {
-  const [compare, setCompare] = useState<Compare>("yoy");
+export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; range: string }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("cost");
-  const [open, setOpen] = useState<string | null>(DATA.campaigns[0]?.name ?? null);
+  const [open, setOpen] = useState<string | null>(data.campaigns[0]?.name ?? null);
   const [hideZero, setHideZero] = useState(true);
+  const [accountCompare, setAccountCompare] = useState<Compare>("mom");
+  const [campaignCompare, setCampaignCompare] = useState<Record<string, Compare>>({});
 
-  const compareKey: PeriodKey = compare === "yoy" ? "yoy" : "lmtd";
-  const compareLabel = compare === "yoy" ? DATA.compareYearLabel : DATA.compareMonthLabel;
-  const compareShort = compare === "yoy" ? "vs last year" : "vs last month";
+  const compareFor = (name: string): Compare => campaignCompare[name] || "mom";
 
   const campaigns = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const rows = DATA.campaigns.filter((c) => {
+    const rows = data.campaigns.filter((c) => {
       if (hideZero && c.inactive) return false;
       if (!q) return true;
       return c.name.toLowerCase().includes(q);
     });
-    const dir = (n: number) => n;
     rows.sort((a, b) => {
-      if (sort === "cost") return dir(b.mtd.cost - a.mtd.cost);
-      if (sort === "value") return dir(b.mtd.convValue - a.mtd.convValue);
-      if (sort === "clicks") return dir(b.mtd.clicks - a.mtd.clicks);
-      if (sort === "roas") return dir((campaignRoas(b) || 0) - (campaignRoas(a) || 0));
-      const ac = changeOf(a, compare).convValue;
-      const bc = changeOf(b, compare).convValue;
-      return dir((bc || -999) - (ac || -999));
+      if (sort === "cost") return b.mtd.cost - a.mtd.cost;
+      if (sort === "value") return b.mtd.convValue - a.mtd.convValue;
+      if (sort === "clicks") return b.mtd.clicks - a.mtd.clicks;
+      if (sort === "roas") return (campaignRoas(b) || 0) - (campaignRoas(a) || 0);
+      const ac = changeOf(a, compareFor(a.name)).convValue;
+      const bc = changeOf(b, compareFor(b.name)).convValue;
+      return (bc || -999) - (ac || -999);
     });
     return rows;
-  }, [compare, hideZero, query, sort]);
+  }, [campaignCompare, data.campaigns, hideZero, query, sort]);
 
-  const maxCost = Math.max(...DATA.campaigns.map((c) => c.mtd.cost), 1);
-  const maxValue = Math.max(...DATA.campaigns.map((c) => c.mtd.convValue), 1);
-  const liveCampaigns = DATA.campaigns.filter((c) => !c.inactive);
-  const accountRoas = DATA.roas;
+  const maxCost = Math.max(...data.campaigns.map((c) => c.mtd.cost), 1);
+  const maxValue = Math.max(...data.campaigns.map((c) => c.mtd.convValue), 1);
+  const liveCampaigns = data.campaigns.filter((c) => !c.inactive);
+  const accountRoas = data.roas;
+  const accountKey: PeriodKey = accountCompare === "yoy" ? "yoy" : "lmtd";
+  const accountShort = accountCompare === "yoy" ? "vs last year" : "vs last month";
 
   return (
     <div className={styles.board}>
       <section className={styles.hero}>
         <div>
           <div className={styles.kicker}>DESS USA · Google Ads</div>
-          <h1>{DATA.title}</h1>
+          <h1>{data.title}</h1>
           <p>
-            {DATA.periodLabel} full month · account {DATA.account} · built for the weekly review
+            {data.periodLabel} · vs last month {data.compareMonthLabel} · account {data.account}
+            {data.source === "snapshot" ? " · snapshot fallback" : ""}
           </p>
         </div>
         <div className={styles.heroActions}>
-          <div className={styles.toggle} role="tablist" aria-label="Comparison">
-            <button
-              type="button"
-              className={compare === "yoy" ? styles.on : ""}
-              onClick={() => setCompare("yoy")}
-            >
-              vs last year
-            </button>
-            <button
-              type="button"
-              className={compare === "mom" ? styles.onMom : ""}
-              onClick={() => setCompare("mom")}
-            >
-              vs last month
-            </button>
-          </div>
+          <Suspense fallback={<div className={styles.print}>Dates…</div>}>
+            <RangeSelect value={range} />
+          </Suspense>
           <button type="button" className={styles.print} onClick={() => window.print()}>
             Print / PDF
           </button>
@@ -135,63 +118,39 @@ export function DessWeeklyReviewBoard() {
       <section className={styles.kpis}>
         <Kpi
           label="Conversion value"
-          value={money(DATA.conversionValue.mtd)}
-          change={compare === "yoy" ? DATA.conversionValue.yoyChange : DATA.conversionValue.momChange}
-          sub={`${money(compare === "yoy" ? DATA.conversionValue.yoy : DATA.conversionValue.lmtd)} ${compareShort}`}
+          value={money(data.conversionValue.mtd)}
+          change={accountCompare === "yoy" ? data.conversionValue.yoyChange : data.conversionValue.momChange}
+          sub={`${money(accountCompare === "yoy" ? data.conversionValue.yoy : data.conversionValue.lmtd)} ${accountShort}`}
         />
         <Kpi
-          label="Spend"
-          value={money(DATA.totals.mtd.cost)}
-          change={changeOf(DATA.totals, compare).cost}
-          sub={`${money(periodOf(DATA.totals, compareKey).cost)} ${compareShort}`}
+          label="Cost"
+          value={money(data.totals.mtd.cost)}
+          change={changeOf(data.totals, accountCompare).cost}
+          sub={`${money(periodOf(data.totals, accountKey).cost)} ${accountShort}`}
           invert
         />
-        <Kpi
-          label="ROAS"
-          value={`${accountRoas.toFixed(1)}x`}
-          sub="Account return on ad spend"
-          good
-        />
+        <Kpi label="ROAS" value={`${accountRoas.toFixed(1)}x`} sub="Account return on ad spend" good />
         <Kpi
           label="Clicks"
-          value={int.format(DATA.totals.mtd.clicks)}
-          change={changeOf(DATA.totals, compare).clicks}
-          sub={`CPC ${money(DATA.totals.mtd.cpc, 2)}`}
+          value={int.format(data.totals.mtd.clicks)}
+          change={changeOf(data.totals, accountCompare).clicks}
+          sub={`CPC ${money(data.totals.mtd.cpc, 2)}`}
         />
         <Kpi
           label="Search impression share"
-          value={`${DATA.totals.mtd.searchImpShare.toFixed(1)}%`}
-          change={changeOf(DATA.totals, compare).searchImpShare}
-          sub={`${periodOf(DATA.totals, compareKey).searchImpShare?.toFixed(1)}% ${compareShort}`}
+          value={data.totals.mtd.searchImpShare == null ? "—" : `${data.totals.mtd.searchImpShare.toFixed(1)}%`}
+          change={changeOf(data.totals, accountCompare).searchImpShare}
+          sub={
+            periodOf(data.totals, accountKey).searchImpShare == null
+              ? accountShort
+              : `${periodOf(data.totals, accountKey).searchImpShare?.toFixed(1)}% ${accountShort}`
+          }
         />
         <Kpi
           label="Impressions"
-          value={int.format(DATA.totals.mtd.impressions)}
-          change={changeOf(DATA.totals, compare).impressions}
-          sub={`${int.format(periodOf(DATA.totals, compareKey).impressions)} ${compareShort}`}
-        />
-      </section>
-
-      <section className={styles.story}>
-        <Talk
-          title="What held up"
-          items={[
-            `Account ROAS is still ${accountRoas.toFixed(1)}x on $${int.format(Math.round(DATA.totals.mtd.cost))} spend.`,
-            compare === "yoy"
-              ? "Conversion value is up 12.1% versus August 2025."
-              : "Spend is essentially flat versus July (−1.7%).",
-            "PMax remarketing is the YoY standout: spend up, value up 84%.",
-          ]}
-        />
-        <Talk
-          title="What to discuss"
-          items={[
-            compare === "yoy"
-              ? "Spend is +73% versus last year, so efficiency is carrying a bigger book."
-              : "Conversion value is −32% versus July. Brand, Compatibilities, Search, and Dental Implants all dropped.",
-            "Brand still makes the most value ($156k), but it is down about a third versus both last year and July.",
-            "Shopping Premilled is off. Lead gen PMax is smaller and less valuable than last year.",
-          ]}
+          value={int.format(data.totals.mtd.impressions)}
+          change={changeOf(data.totals, accountCompare).impressions}
+          sub={`${int.format(periodOf(data.totals, accountKey).impressions)} ${accountShort}`}
         />
       </section>
 
@@ -213,7 +172,7 @@ export function DessWeeklyReviewBoard() {
         <div className={styles.card}>
           <div className={styles.cardHead}>
             <h3>Value mix</h3>
-            <span>August conversion value</span>
+            <span>Current window conversion value</span>
           </div>
           <MixBars
             rows={liveCampaigns}
@@ -236,7 +195,7 @@ export function DessWeeklyReviewBoard() {
         <div className={styles.sorts}>
           {(
             [
-              ["cost", "Spend"],
+              ["cost", "Cost"],
               ["value", "Value"],
               ["roas", "ROAS"],
               ["clicks", "Clicks"],
@@ -254,71 +213,80 @@ export function DessWeeklyReviewBoard() {
           ))}
         </div>
         <label className={styles.check}>
-          <input
-            type="checkbox"
-            checked={hideZero}
-            onChange={(e) => setHideZero(e.target.checked)}
-          />
+          <input type="checkbox" checked={hideZero} onChange={(e) => setHideZero(e.target.checked)} />
           Hide zero-spend
         </label>
+        <CompareToggle value={accountCompare} onChange={setAccountCompare} compact={false} />
       </section>
 
       <section className={styles.list}>
         {campaigns.map((c) => {
+          const compare = compareFor(c.name);
+          const compareKey: PeriodKey = compare === "yoy" ? "yoy" : "lmtd";
           const prior = periodOf(c, compareKey);
           const change = changeOf(c, compare);
           const r = campaignRoas(c);
           const isOpen = open === c.name;
+          const compareLabel = compare === "yoy" ? data.compareYearLabel : data.compareMonthLabel;
+          const compareShort = compare === "yoy" ? "vs last year" : "vs last month";
           return (
             <article
               key={c.name}
               className={`${styles.campaign} ${isOpen ? styles.campaignOpen : ""} ${c.inactive ? styles.inactive : ""}`}
             >
-              <button
-                type="button"
-                className={styles.campaignBtn}
-                onClick={() => setOpen(isOpen ? null : c.name)}
-                aria-expanded={isOpen}
-              >
-                <div className={styles.campaignTitle}>
-                  <strong>{c.name}</strong>
-                  <div className={styles.tags}>
-                    {c.newThisYear ? <span className={styles.tagNew}>New vs last year</span> : null}
-                    {c.inactive ? <span className={styles.tagOff}>Off in August</span> : null}
-                    {r != null && r >= 15 ? <span className={styles.tagGood}>{r.toFixed(1)}x ROAS</span> : null}
-                    {r != null && r < 5 && c.mtd.cost > 0 ? (
-                      <span className={styles.tagWarn}>{r.toFixed(1)}x ROAS</span>
-                    ) : null}
+              <div className={styles.campaignTop}>
+                <button
+                  type="button"
+                  className={styles.campaignBtn}
+                  onClick={() => setOpen(isOpen ? null : c.name)}
+                  aria-expanded={isOpen}
+                >
+                  <div className={styles.campaignTitle}>
+                    <strong>{c.name}</strong>
+                    <div className={styles.tags}>
+                      {c.newThisYear ? <span className={styles.tagNew}>New vs last year</span> : null}
+                      {c.inactive ? <span className={styles.tagOff}>No spend this window</span> : null}
+                      {r != null && r >= 15 ? <span className={styles.tagGood}>{r.toFixed(1)}x ROAS</span> : null}
+                      {r != null && r < 5 && c.mtd.cost > 0 ? (
+                        <span className={styles.tagWarn}>{r.toFixed(1)}x ROAS</span>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-                <div className={styles.campaignNums}>
-                  <Stat label="Spend" value={money(c.mtd.cost)} change={change.cost} invert />
-                  <Stat label="Value" value={money(c.mtd.convValue)} change={change.convValue} />
-                  <Stat label="ROAS" value={r == null ? "—" : `${r.toFixed(1)}x`} />
-                  <Stat label="Clicks" value={int.format(c.mtd.clicks)} change={change.clicks} />
-                </div>
-              </button>
+                  <div className={styles.campaignNums}>
+                    <Stat label="Cost" value={money(c.mtd.cost)} change={change.cost} invert />
+                    <Stat label="Value" value={money(c.mtd.convValue)} change={change.convValue} />
+                    <Stat label="ROAS" value={r == null ? "—" : `${r.toFixed(1)}x`} />
+                    <Stat label="Clicks" value={int.format(c.mtd.clicks)} change={change.clicks} />
+                  </div>
+                </button>
+                <CompareToggle
+                  value={compare}
+                  onChange={(next) => setCampaignCompare((prev) => ({ ...prev, [c.name]: next }))}
+                  compact
+                />
+              </div>
               {isOpen ? (
                 <div className={styles.detail}>
                   <table className={styles.table}>
                     <thead>
                       <tr>
                         <th></th>
-                        <th>Spend</th>
+                        <th>Cost</th>
                         <th>Impr.</th>
                         <th>Clicks</th>
                         <th>CPC</th>
-                        <th>IS</th>
+                        <th>SIS</th>
+                        <th>Conv.</th>
                         <th>Value</th>
                         <th>ROAS</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr>
-                        <td>August 2026</td>
+                      <tr className={styles.nowRow}>
+                        <td>Current · {data.periodLabel}</td>
                         <MetricCells m={c.mtd} />
                       </tr>
-                      <tr>
+                      <tr className={styles.priorRow}>
                         <td>{compareLabel}</td>
                         <MetricCells m={prior} />
                       </tr>
@@ -333,6 +301,7 @@ export function DessWeeklyReviewBoard() {
                             ? "—"
                             : `${change.searchImpShare > 0 ? "+" : change.searchImpShare < 0 ? "−" : ""}${Math.abs(change.searchImpShare * 100).toFixed(1)} pts`}
                         </td>
+                        <td className={styles[tone(change.conversions ?? null)]}>{pct(change.conversions ?? null)}</td>
                         <td className={styles[tone(change.convValue)]}>{pct(change.convValue)}</td>
                         <td className={styles[tone(roasDelta(c.mtd, prior))]}>{pct(roasDelta(c.mtd, prior))}</td>
                       </tr>
@@ -345,6 +314,27 @@ export function DessWeeklyReviewBoard() {
         })}
         {!campaigns.length ? <div className={styles.empty}>No campaigns match that filter.</div> : null}
       </section>
+    </div>
+  );
+}
+
+function CompareToggle({
+  value,
+  onChange,
+  compact,
+}: {
+  value: Compare;
+  onChange: (next: Compare) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className={compact ? styles.toggleSmall : styles.toggle} role="tablist" aria-label="Comparison">
+      <button type="button" className={value === "mom" ? styles.onMom : ""} onClick={() => onChange("mom")}>
+        vs month
+      </button>
+      <button type="button" className={value === "yoy" ? styles.on : ""} onClick={() => onChange("yoy")}>
+        vs year
+      </button>
     </div>
   );
 }
@@ -365,6 +355,7 @@ function MetricCells({ m }: { m: PeriodMetrics }) {
       <td>{int.format(m.clicks)}</td>
       <td>{m.cost || m.clicks ? money(m.cpc, 2) : "—"}</td>
       <td>{m.searchImpShare == null ? "—" : `${m.searchImpShare.toFixed(1)}%`}</td>
+      <td>{int.format(m.conversions || 0)}</td>
       <td>{money(m.convValue)}</td>
       <td>{r == null ? "—" : `${r.toFixed(1)}x`}</td>
     </>
@@ -398,19 +389,6 @@ function Kpi({
       </div>
       <strong>{value}</strong>
       {sub ? <p>{sub}</p> : null}
-    </div>
-  );
-}
-
-function Talk({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div className={styles.talk}>
-      <h3>{title}</h3>
-      <ul>
-        {items.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ul>
     </div>
   );
 }
