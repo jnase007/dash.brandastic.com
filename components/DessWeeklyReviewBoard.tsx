@@ -216,20 +216,6 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
                 >
                   <div className={styles.campaignTitle}>
                     <strong>{c.name}</strong>
-                    <div className={styles.tags}>
-                      {c.newThisYear ? <span className={styles.tagNew}>New vs last year</span> : null}
-                      {c.inactive ? <span className={styles.tagOff}>No spend this window</span> : null}
-                      {r != null && r >= 15 ? <span className={styles.tagGood}>{r.toFixed(1)}x ROAS</span> : null}
-                      {r != null && r < 5 && c.mtd.cost > 0 ? (
-                        <span className={styles.tagWarn}>{r.toFixed(1)}x ROAS</span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className={styles.campaignNums}>
-                    <Stat label="Cost" value={money(c.mtd.cost)} change={change.cost} invert />
-                    <Stat label="Value" value={money(c.mtd.convValue)} change={change.convValue} />
-                    <Stat label="ROAS" value={r == null ? "—" : `${r.toFixed(1)}x`} />
-                    <Stat label="Clicks" value={int.format(c.mtd.clicks)} change={change.clicks} />
                   </div>
                 </button>
                 <div className={styles.campaignToggles}>
@@ -246,6 +232,20 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
               </div>
               {isOpen ? (
                 <div className={styles.detail}>
+                  <div className={styles.tags}>
+                    {c.newThisYear ? <span className={styles.tagNew}>New vs last year</span> : null}
+                    {c.inactive ? <span className={styles.tagOff}>No spend this window</span> : null}
+                    {r != null && r >= 15 ? <span className={styles.tagGood}>{r.toFixed(1)}x ROAS</span> : null}
+                    {r != null && r < 5 && c.mtd.cost > 0 ? (
+                      <span className={styles.tagWarn}>{r.toFixed(1)}x ROAS</span>
+                    ) : null}
+                  </div>
+                  <div className={styles.campaignNums}>
+                    <Stat label="Cost" value={money(c.mtd.cost)} change={change.cost} invert />
+                    <Stat label="Value" value={money(c.mtd.convValue)} change={change.convValue} />
+                    <Stat label="ROAS" value={r == null ? "—" : `${r.toFixed(1)}x`} />
+                    <Stat label="Clicks" value={int.format(c.mtd.clicks)} change={change.clicks} />
+                  </div>
                   {view === "line" ? (
                     <DessCompareBars now={c.mtd} prior={prior} nowLabel={data.periodLabel} priorLabel={compareLabel} />
                   ) : (
