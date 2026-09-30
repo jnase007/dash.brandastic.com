@@ -578,6 +578,19 @@
   }
 }
 
+.metricPick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.chartHint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #667085;
+}
+
 @media print {
   .heroActions,
   .toolbar,

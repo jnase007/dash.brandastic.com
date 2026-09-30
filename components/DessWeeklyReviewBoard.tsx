@@ -2,7 +2,7 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { RangeSelect } from "@/components/RangeSelect";
-import { DessCompareBars } from "@/components/DessCompareBars";
+import { DessCompareSeries } from "@/components/DessCompareSeries";
 import { DessMixChart } from "@/components/DessMixChart";
 import { DessTrendChart } from "@/components/DessTrendChart";
 import { roas, type CampaignReview, type ChangeSet, type PeriodKey, type PeriodMetrics } from "@/lib/dess-weekly-review";
@@ -245,9 +245,14 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
                     <Stat label="Value" value={money(c.mtd.convValue)} change={change.convValue} />
                     <Stat label="ROAS" value={r == null ? "—" : `${r.toFixed(1)}x`} />
                     <Stat label="Clicks" value={int.format(c.mtd.clicks)} change={change.clicks} />
+                    <Stat
+                      label="Imp. share"
+                      value={c.mtd.searchImpShare == null ? "—" : `${c.mtd.searchImpShare.toFixed(1)}%`}
+                      change={change.searchImpShare}
+                    />
                   </div>
                   {view === "line" ? (
-                    <DessCompareBars now={c.mtd} prior={prior} nowLabel={data.periodLabel} priorLabel={compareLabel} />
+                    <DessCompareSeries now={c.mtd} prior={prior} nowLabel={data.periodLabel} priorLabel={compareLabel} />
                   ) : (
                     <table className={styles.table}>
                       <thead>
@@ -261,6 +266,7 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
                           <th>Value</th>
                           <th>Conv. rate</th>
                           <th>ROAS</th>
+                          <th>Imp. share</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -286,6 +292,7 @@ export function DessWeeklyReviewBoard({ data, range }: { data: DessWeeklyLive; r
                             {pct(rateDelta(convRate(c.mtd), convRate(prior)))}
                           </td>
                           <td className={styles[tone(roasDelta(c.mtd, prior))]}>{pct(roasDelta(c.mtd, prior))}</td>
+                          <td className={styles[tone(change.searchImpShare)]}>{pct(change.searchImpShare)}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -406,6 +413,7 @@ function MetricCells({ m }: { m: PeriodMetrics }) {
       <td>{money(m.convValue)}</td>
       <td>{cr == null ? "—" : `${(cr * 100).toFixed(2)}%`}</td>
       <td>{r == null ? "—" : `${r.toFixed(1)}x`}</td>
+      <td>{m.searchImpShare == null ? "—" : `${m.searchImpShare.toFixed(1)}%`}</td>
     </>
   );
 }
