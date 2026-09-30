@@ -481,28 +481,41 @@
 }
 
 .campaignNums {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 14px;
+  overflow-x: auto;
 }
 
 .stat {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  flex: 1 1 0;
 }
 
 .stat span {
   color: #667085;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .stat b {
-  font-size: 16px;
+  font-size: 14px;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.stat em {
+  font-size: 11px;
+  line-height: 1.1;
 }
 
 .detail {
@@ -555,7 +568,6 @@
   .hero,
   .story,
   .mix,
-  .campaignNums,
   .barRow {
     grid-template-columns: 1fr;
     display: grid;
