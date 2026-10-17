@@ -9,6 +9,7 @@ const links = [
   { href: "/clients", label: "Clients", icon: "◎" },
   { href: "/insights", label: "AI Insights", icon: "✦" },
   { href: "/reports", label: "Reports", icon: "☰" },
+  { href: "/profitability", label: "Profitability", icon: "◷" },
   { href: "/seo", label: "SEO", icon: "▤" },
   { href: "/meta", label: "Meta Ads", icon: "◈" },
   { href: "/google", label: "Google Ads", icon: "◇" },

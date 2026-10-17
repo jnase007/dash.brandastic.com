@@ -16,6 +16,13 @@ const BASE: Item[] = [
   { id: "clients", label: "All clients", href: "/clients", group: "Navigate" },
   { id: "insights", label: "AI Insights", href: "/insights", group: "Navigate" },
   { id: "reports", label: "Client reports", href: "/reports", group: "Navigate" },
+  {
+    id: "profit",
+    label: "Client Reports & Profitability",
+    hint: "Retainer hours and margin",
+    href: "/profitability",
+    group: "Navigate",
+  },
   { id: "meta", label: "Meta Ads", href: "/meta", group: "Navigate" },
   { id: "google", label: "Google Ads", href: "/google", group: "Navigate" },
   { id: "deep", label: "Deep Analysis", href: "/deep-analysis", group: "Navigate" },
