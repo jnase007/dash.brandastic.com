@@ -1,5 +1,5 @@
 export const PROFIT_RANGES = [
-  { id: "week", label: "This Week" },
+  { id: "quarter", label: "This Quarter" },
   { id: "month", label: "This Month" },
   { id: "year", label: "Contract Year" },
 ] as const;
@@ -35,7 +35,7 @@ export type TimeEntry = {
 
 export type DateBounds = {
   asOf: string;
-  weekStart: string;
+  quarterStart: string;
   monthStart: string;
 };
 
@@ -60,8 +60,14 @@ export function clientBySlug(clients: ProfitClient[], slug: string) {
   return clients.find((client) => client.slug === slug);
 }
 
+export function quarterStartDate(asOf: string) {
+  const [year, month] = asOf.split("-").map(Number);
+  const startMonth = Math.floor((month - 1) / 3) * 3 + 1;
+  return `${year}-${pad(startMonth)}-01`;
+}
+
 export function reportWindow(client: ProfitClient, range: ProfitRange, bounds: DateBounds) {
-  if (range === "week") return { start: bounds.weekStart, end: bounds.asOf };
+  if (range === "quarter") return { start: bounds.quarterStart, end: bounds.asOf };
   if (range === "month") return { start: bounds.monthStart, end: bounds.asOf };
   if (!client.contractStart || !client.contractEnd) return null;
   return { start: client.contractStart, end: client.contractEnd };
@@ -89,7 +95,7 @@ export function entriesFor(
     if (!client) return false;
     if (range === "year" && !client.contractStart) return false;
     const start =
-      range === "week" ? bounds.weekStart : range === "month" ? bounds.monthStart : client.contractStart;
+      range === "quarter" ? bounds.quarterStart : range === "month" ? bounds.monthStart : client.contractStart;
     const end = range === "year" ? client.contractEnd : bounds.asOf;
     return entry.date >= start && entry.date <= end;
   });
@@ -125,14 +131,19 @@ export function summarize(entries: TimeEntry[]): HourSummary {
   return { totalMinutes, cost };
 }
 
+export function chartAllocationMinutes(client: ProfitClient | undefined) {
+  const monthly = client?.allocatedHours;
+  if (monthly == null || monthly <= 0) return null;
+  return monthly * 60;
+}
+
 export function hoursBudget(client: ProfitClient, range: ProfitRange, bounds: DateBounds): number | null {
   const monthly = client.allocatedHours;
   if (monthly == null || monthly <= 0) return null;
   if (range === "month") return monthly;
-  if (range === "week") {
-    const days = eachDate(bounds.weekStart, bounds.asOf).length;
-    const dim = daysInMonth(bounds.asOf);
-    return monthly * (days / dim);
+  if (range === "quarter") {
+    const month = Number(bounds.asOf.slice(5, 7));
+    return monthly * (((month - 1) % 3) + 1);
   }
   const months = contractMonths(client);
   return months == null ? null : monthly * months;
@@ -214,25 +225,20 @@ export type ChartBucket = {
 };
 
 export function chartBuckets(range: ProfitRange, entries: TimeEntry[], bounds: DateBounds): ChartBucket[] {
-  if (range === "week") {
-    return eachDate(bounds.weekStart, bounds.asOf).map((date) =>
-      bucket(date, weekdayLabel(date), entries.filter((entry) => entry.date === date))
-    );
+  if (range === "quarter") {
+    const buckets: ChartBucket[] = [];
+    let cursor = bounds.quarterStart;
+    const endMonth = bounds.asOf.slice(0, 7);
+    while (cursor.slice(0, 7) <= endMonth) {
+      const key = cursor.slice(0, 7);
+      buckets.push(bucket(key, MONTHS[Number(key.slice(5, 7)) - 1], entries.filter((entry) => entry.date.startsWith(key))));
+      cursor = shiftMonths(cursor, 1);
+    }
+    return buckets;
   }
   if (range === "month") {
-    const groups = new Map<string, TimeEntry[]>();
-    for (const entry of entries) {
-      const key = weekKey(entry.date);
-      const list = groups.get(key) || [];
-      list.push(entry);
-      groups.set(key, list);
-    }
-    return [...groups.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, list]) => {
-        const first = [...list].sort((a, b) => a.date.localeCompare(b.date))[0];
-        return bucket(key, shortDate(first?.date || key), list);
-      });
+    const key = bounds.monthStart.slice(0, 7);
+    return [bucket(key, MONTHS[Number(key.slice(5, 7)) - 1], entries)];
   }
   const groups = new Map<string, TimeEntry[]>();
   for (const entry of entries) {
@@ -250,46 +256,9 @@ export function chartBuckets(range: ProfitRange, entries: TimeEntry[], bounds: D
   });
 }
 
-function eachDate(start: string, end: string) {
-  const dates: string[] = [];
-  const cursor = new Date(`${start}T00:00:00Z`);
-  const last = new Date(`${end}T00:00:00Z`);
-  while (cursor <= last) {
-    dates.push(cursor.toISOString().slice(0, 10));
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-  return dates;
-}
-
 function bucket(key: string, label: string, entries: TimeEntry[]): ChartBucket {
   const minutes = entries.reduce((sum, entry) => sum + entry.minutes, 0);
   return { key, label, minutes };
-}
-
-function daysInMonth(iso: string) {
-  const [year, month] = iso.split("-").map(Number);
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
-}
-
-function weekKey(iso: string) {
-  const [year, month, day] = iso.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  const weekday = date.getUTCDay();
-  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
-  date.setUTCDate(date.getUTCDate() + mondayOffset);
-  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
-}
-
-function shortDate(iso: string) {
-  const [, month, day] = iso.split("-").map(Number);
-  return `${MONTHS[month - 1]} ${day}`;
-}
-
-function weekdayLabel(iso: string) {
-  const [year, month, day] = iso.split("-").map(Number);
-  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return `${names[weekday]} ${day}`;
 }
 
 export type DonutSlice = {
@@ -325,7 +294,11 @@ export function formatDuration(minutes: number) {
 }
 
 export function formatHours(hours: number) {
-  const rounded = Math.round(hours * 10) / 10;
+  return String(Math.round(hours));
+}
+
+export function formatPct(value: number) {
+  const rounded = Math.round(value * 10) / 10;
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 

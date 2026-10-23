@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   PROFIT_RANGES,
   burnHealth,
+  chartAllocationMinutes,
   chartBuckets,
   clientBySlug,
   contractTrend,
@@ -12,11 +13,10 @@ import {
   formatDuration,
   formatEntryDate,
   formatHours,
+  formatPct,
   hoursBudget,
-  moneyExact,
   reportWindow,
   contractTermLabel,
-  summarize,
   type ProfitabilityData,
   type ProfitRange,
   type TimeEntry,
@@ -28,7 +28,6 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
   const { clients, entries, bounds, coverage } = data;
   const [range, setRange] = useState<ProfitRange>("month");
   const [clientSlug, setClientSlug] = useState(clients[0]?.slug ?? "");
-  const [showProfit, setShowProfit] = useState(false);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [activeSlice, setActiveSlice] = useState<string | null>(null);
@@ -56,7 +55,6 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
     () => entriesFor(entries, clients, range, clientSlug, bounds),
     [entries, clients, range, clientSlug, bounds]
   );
-  const summary = useMemo(() => summarize(viewEntries), [viewEntries]);
   const trend = useMemo(
     () => contractTrend(entries, clients, clientSlug, bounds.asOf),
     [entries, clients, clientSlug, bounds.asOf]
@@ -135,20 +133,12 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            className={`pr-switch ${showProfit ? "on" : ""}`}
-            aria-pressed={showProfit}
-            onClick={() => setShowProfit((value) => !value)}
-          >
-            <span className="pr-switch-knob" aria-hidden />
-            Show Profit / Cost Metrics
-          </button>
         </div>
       </header>
       <p className="pr-note">
         Logged hours are Tempo worklogs through {bounds.asOf}, summed the same way as the retainer report. This Month
-        compares those hours with the monthly allocation from Brand Care Clients. Contract Year uses column C: from
+        compares those hours with the monthly allocation from Brand Care Clients. This Quarter is the calendar quarter
+        through today, using that allocation for each month already underway. Contract Year uses column C: from
         365 days before the renewal date through today, or through that date if it has already passed. MTM shows the
         last 12 months, including this month. All tracked time is billable.
       </p>
@@ -157,12 +147,11 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
           Clients are the Jira project ids on the Brand Care Clients sheet. Tempo does not store the monthly hour
           budget.
         </li>
-        <li>Billing rates are $0, so revenue, profit, and margin are not available. The toggle shows labor cost.</li>
+        <li>Billing rates are $0, so revenue, profit, and margin are not available.</li>
         <li>Task names and Jira issue keys are not in Tempo. The table shows the numeric issue id.</li>
         <li>Team labels are Tempo role names, not full Jira profiles.</li>
         <li>
-          {coverage.describedCount} of {coverage.entryCount} entries have a worklog description. Labor cost is on{" "}
-          {coverage.costedCount} of them. Recent time often has no financial actual yet.
+          {coverage.describedCount} of {coverage.entryCount} entries have a worklog description.
         </li>
       </ul>
 
@@ -181,17 +170,17 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
               <div className="pr-card-top">
                 <strong>{client.name}</strong>
                 <span className={`pr-burn ${hasBudget ? health : "warn"}`}>
-                  {hasBudget ? `${formatHours(pct)}%` : "No allocation"}
+                  {hasBudget ? `${formatPct(pct)}%` : "No allocation"}
                 </span>
               </div>
               <div className="pr-card-hours">
                 <span>
-                  <em>{hasBudget && budget != null ? `${formatHours(budget)} hrs` : "—"}</em>
-                  {range === "month" ? "Allocated" : range === "week" ? "Week share" : "Contract hrs"}
+                  <em>{formatHours(logged)}</em>
+                  Logged
                 </span>
                 <span>
-                  <em>{formatHours(logged)} hrs</em>
-                  Logged
+                  <em>{hasBudget && budget != null ? formatHours(budget) : "—"}</em>
+                  {range === "month" ? "Allocated" : range === "quarter" ? "Quarter hrs" : "Contract hrs"}
                 </span>
               </div>
               <div className="pr-track" aria-hidden>
@@ -228,33 +217,19 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
           <HoursSummary
             logged={selectedCard?.logged ?? 0}
             budget={selectedCard?.hasBudget ? selectedCard.budget : null}
-            budgetLabel={range === "month" ? "Allocated" : range === "week" ? "This week" : "Contract hrs"}
+            budgetLabel={range === "month" ? "Allocated" : range === "quarter" ? "Quarter hrs" : "Contract hrs"}
           />
           <article className="pr-kpi">
             <span>Monthly pace</span>
-            <strong>{trend.averageHours.toFixed(1)} hrs / mo</strong>
+            <strong>{formatHours(trend.averageHours)} hrs / mo</strong>
             {trend.allocatedHours != null ? (
               <small className={trend.averageHours > trend.allocatedHours ? "over" : "under"}>
-                {formatHours(trend.allocatedHours)} hrs allocated / mo
+                {formatHours(trend.allocatedHours)} allocated / mo
               </small>
             ) : (
               <small>No monthly allocation</small>
             )}
             <em>{selected ? contractTermLabel(selected) : ""}</em>
-          </article>
-          <article className={`pr-kpi profit ${showProfit ? "" : "hidden"}`}>
-            <span>Labor cost</span>
-            {showProfit ? (
-              <>
-                <strong>{moneyExact(summary.cost)}</strong>
-                <small>Profit and margin are not in Tempo</small>
-              </>
-            ) : (
-              <>
-                <strong className="masked">$ ••••••</strong>
-                <small>Hidden until the admin toggle is on</small>
-              </>
-            )}
           </article>
         </div>
 
@@ -265,9 +240,8 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
             </div>
             <BarChart
               buckets={buckets}
-              allocationMinutes={
-                range === "year" && selected?.allocatedHours ? selected.allocatedHours * 60 : null
-              }
+              allocationMinutes={chartAllocationMinutes(selected)}
+              colorByAllocation
               active={activeBar}
               onActive={setActiveBar}
             />
@@ -355,16 +329,16 @@ function HoursSummary({
     <article className="pr-kpi pr-kpi-burn">
       <div className="pr-card-top">
         <span>Total hours</span>
-        <span className={`pr-burn ${budget ? health : "warn"}`}>{budget ? `${formatHours(pct)}%` : "No allocation"}</span>
+        <span className={`pr-burn ${budget ? health : "warn"}`}>{budget ? `${formatPct(pct)}%` : "No allocation"}</span>
       </div>
       <div className="pr-card-hours">
         <span>
-          <em>{budget != null ? `${formatHours(budget)} hrs` : "—"}</em>
-          {budgetLabel}
+          <em>{formatHours(logged)}</em>
+          Logged
         </span>
         <span>
-          <em>{formatHours(logged)} hrs</em>
-          Logged
+          <em>{budget != null ? formatHours(budget) : "—"}</em>
+          {budgetLabel}
         </span>
       </div>
       <div className="pr-track" aria-hidden>
@@ -394,22 +368,31 @@ function EntryRow({ entry }: { entry: TimeEntry }) {
 function BarChart({
   buckets,
   allocationMinutes,
+  colorByAllocation,
   active,
   onActive,
 }: {
   buckets: { key: string; label: string; minutes: number }[];
   allocationMinutes: number | null;
+  colorByAllocation: boolean;
   active: string | null;
   onActive: (key: string | null) => void;
 }) {
   const max = Math.max(...buckets.map((bucket) => bucket.minutes), 1);
-  const split = allocationMinutes != null && allocationMinutes > 0;
+  const hasLine = allocationMinutes != null && allocationMinutes > 0;
+  const ceiling = Math.max(max, hasLine ? allocationMinutes : 0);
   return (
     <div className="pr-bars">
+      {hasLine ? (
+        <span
+          className="pr-allocation-line"
+          style={{ bottom: `calc(24px + (100% - 46px) * ${allocationMinutes / ceiling})` }}
+        />
+      ) : null}
       {buckets.map((bucket) => {
-        const within = split ? Math.min(bucket.minutes, allocationMinutes) : bucket.minutes;
-        const over = split ? Math.max(0, bucket.minutes - allocationMinutes) : 0;
-        const height = `${(bucket.minutes / max) * 100}%`;
+        const within = hasLine ? Math.min(bucket.minutes, allocationMinutes) : bucket.minutes;
+        const over = hasLine ? Math.max(0, bucket.minutes - allocationMinutes) : 0;
+        const height = `${(bucket.minutes / ceiling) * 100}%`;
         return (
           <button
             key={bucket.key}
@@ -421,7 +404,7 @@ function BarChart({
             onBlur={() => onActive(null)}
           >
             <span className="pr-bar-stack">
-              {split ? (
+              {colorByAllocation && hasLine ? (
                 <span className="pr-bar-col" style={{ height }}>
                   <span className="pr-bar-value">{formatHours(bucket.minutes / 60)}h</span>
                   {over > 0 ? <span className="pr-bar-over" style={{ flexGrow: over }} /> : null}
@@ -440,9 +423,7 @@ function BarChart({
               <span className="pr-tip" role="tooltip">
                 <strong>{bucket.label}</strong>
                 {formatHours(bucket.minutes / 60)}h
-                <br />
-                {formatDuration(bucket.minutes)}
-                {split ? (
+                {hasLine ? (
                   <>
                     <br />
                     {formatHours(allocationMinutes / 60)}h allocated

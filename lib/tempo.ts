@@ -1,5 +1,5 @@
 import type { ProfitabilityData, ProfitClient, RenewalKind, TimeEntry } from "./profitability";
-import { contractYearWindow, formatEntryDate } from "./profitability";
+import { contractYearWindow, formatEntryDate, quarterStartDate } from "./profitability";
 
 const TEMPO_BASE = "https://api.tempo.io";
 const RETAINER_SHEET_CSV =
@@ -50,7 +50,7 @@ async function loadTempoProfitability(): Promise<ProfitabilityData> {
   const asOf = losAngelesDate();
   const bounds = {
     asOf,
-    weekStart: mondayOf(asOf),
+    quarterStart: quarterStartDate(asOf),
     monthStart: `${asOf.slice(0, 7)}-01`,
   };
   const [projects, roles, allocations] = await Promise.all([
@@ -80,7 +80,7 @@ async function loadTempoProfitability(): Promise<ProfitabilityData> {
     const renewal = allocation?.renewal ?? { kind: "unknown" as const };
     const renewalDate = renewal.kind === "date" ? renewal.date ?? null : null;
     const window = contractYearWindow(renewal.kind, renewalDate, asOf);
-    const from = [bounds.weekStart, bounds.monthStart, window?.start].filter((date): date is string => Boolean(date)).sort()[0];
+    const from = [bounds.quarterStart, bounds.monthStart, window?.start].filter((date): date is string => Boolean(date)).sort()[0];
     const [labor, worklogs] = await Promise.all([
       project?.laborActuals?.self ? tempoOffset<TempoLabor>(project.laborActuals.self) : Promise.resolve([]),
       tempoOffset<TempoWorklog>(`/4/worklogs?projectId=${jiraId}&from=${from}&to=${asOf}`),
@@ -267,15 +267,6 @@ function slugify(name: string) {
 
 function losAngelesDate() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
-}
-
-function mondayOf(iso: string) {
-  const [year, month, day] = iso.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  const weekday = date.getUTCDay();
-  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
-  date.setUTCDate(date.getUTCDate() + mondayOffset);
-  return date.toISOString().slice(0, 10);
 }
 
 async function tempoGet<T>(path: string): Promise<T> {

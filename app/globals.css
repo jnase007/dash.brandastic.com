@@ -2722,6 +2722,8 @@ code {
 
 .pr-segment {
   display: inline-flex;
+  align-items: center;
+  align-self: flex-end;
   padding: 3px;
   border-radius: 12px;
   background: #f8fafc;
@@ -2744,57 +2746,6 @@ code {
   background: #fff;
   color: #5b21b6;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-
-.pr-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  border-radius: 999px;
-  padding: 8px 12px 8px 8px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  color: #334155;
-  cursor: pointer;
-}
-
-.pr-switch-knob {
-  width: 36px;
-  height: 20px;
-  border-radius: 999px;
-  background: #e2e8f0;
-  position: relative;
-  flex: 0 0 auto;
-}
-
-.pr-switch-knob::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.2);
-  transition: transform 0.15s ease;
-}
-
-.pr-switch.on {
-  border-color: #ddd6fe;
-  background: #f5f3ff;
-  color: #5b21b6;
-}
-
-.pr-switch.on .pr-switch-knob {
-  background: #7c3aed;
-}
-
-.pr-switch.on .pr-switch-knob::after {
-  transform: translateX(16px);
 }
 
 .pr-note {
@@ -2920,6 +2871,10 @@ code {
   text-transform: uppercase;
 }
 
+.pr-card-hours span:last-child {
+  text-align: right;
+}
+
 .pr-card-hours em {
   font-style: normal;
   color: #0f172a;
@@ -2996,7 +2951,7 @@ code {
 
 .pr-kpis {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -3044,15 +2999,6 @@ code {
 
 .pr-kpi small.under {
   color: #15803d;
-}
-
-.pr-kpi strong.masked {
-  letter-spacing: 0.08em;
-  color: #94a3b8;
-}
-
-.pr-kpi.profit.hidden {
-  background: #f8fafc;
 }
 
 .pr-kpi-burn {
@@ -3124,6 +3070,7 @@ code {
 }
 
 .pr-bars {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 8px;
@@ -3148,11 +3095,22 @@ code {
 }
 
 .pr-bar-stack {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   height: 100%;
   gap: 2px;
+}
+
+.pr-bars .pr-allocation-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  height: 1px;
+  background: #94a3b8;
+  pointer-events: none;
 }
 
 .pr-bar-stack .bill,
@@ -3462,15 +3420,14 @@ code {
 }
 
 @media (max-width: 1100px) {
-  .pr-header,
-  .pr-controls {
-    align-items: stretch;
-  }
   .pr-header {
+    align-items: stretch;
     flex-direction: column;
   }
   .pr-controls {
+    align-items: flex-end;
     justify-content: flex-start;
+    flex: 1 1 auto;
   }
   .pr-charts {
     grid-template-columns: 1fr;
