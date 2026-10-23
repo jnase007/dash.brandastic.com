@@ -6,6 +6,11 @@ export const PROFIT_RANGES = [
 
 export type ProfitRange = (typeof PROFIT_RANGES)[number]["id"];
 
+export function profitRange(value: string | undefined): ProfitRange {
+  if (value === "quarter" || value === "month" || value === "year") return value;
+  return "month";
+}
+
 export type RenewalKind = "date" | "mtm" | "unknown";
 
 export type ProfitClient = {

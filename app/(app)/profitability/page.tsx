@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ProfitabilityDashboard } from "@/components/ProfitabilityDashboard";
+import { profitRange } from "@/lib/profitability";
 import { getTempoProfitability } from "@/lib/tempo";
 
 export const metadata: Metadata = {
@@ -8,10 +9,15 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function ProfitabilityPage() {
+export default async function ProfitabilityPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string }>;
+}) {
+  const { range } = await searchParams;
   try {
     const data = await getTempoProfitability();
-    return <ProfitabilityDashboard data={data} />;
+    return <ProfitabilityDashboard data={data} view="overview" range={profitRange(range)} />;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Tempo could not be loaded.";
     return (

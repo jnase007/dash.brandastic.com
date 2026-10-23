@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   PROFIT_RANGES,
@@ -8,9 +10,7 @@ import {
   chartBuckets,
   clientBySlug,
   contractTrend,
-  donutSlices,
   entriesFor,
-  formatDuration,
   formatEntryDate,
   formatHours,
   formatPct,
@@ -19,48 +19,62 @@ import {
   contractTermLabel,
   type ProfitabilityData,
   type ProfitRange,
-  type TimeEntry,
 } from "@/lib/profitability";
 
-const PAGE_SIZE = 8;
+function profitabilityHref(range: ProfitRange, slug?: string) {
+  const query = `?range=${range}`;
+  return slug ? `/profitability/${slug}${query}` : `/profitability${query}`;
+}
 
-export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
-  const { clients, entries, bounds, coverage } = data;
-  const [range, setRange] = useState<ProfitRange>("month");
-  const [clientSlug, setClientSlug] = useState(clients[0]?.slug ?? "");
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const [activeSlice, setActiveSlice] = useState<string | null>(null);
+export function ProfitabilityDashboard({
+  data,
+  view,
+  slug = "",
+  range: initialRange,
+}: {
+  data: ProfitabilityData;
+  view: "overview" | "client";
+  slug?: string;
+  range: ProfitRange;
+}) {
+  const router = useRouter();
+  const { clients, entries, bounds } = data;
+  const [range, setRange] = useState<ProfitRange>(initialRange);
   const [activeBar, setActiveBar] = useState<string | null>(null);
-  const [showAllCards, setShowAllCards] = useState(false);
-  const [cardColumns, setCardColumns] = useState(4);
 
   useEffect(() => {
-    setPage(1);
-  }, [query, clientSlug, range]);
+    setRange(initialRange);
+  }, [initialRange]);
 
   useEffect(() => {
-    const wide = window.matchMedia("(min-width: 1281px)");
-    const apply = () => setCardColumns(wide.matches ? 4 : 2);
-    apply();
-    wide.addEventListener("change", apply);
-    return () => wide.removeEventListener("change", apply);
-  }, []);
+    setActiveBar(null);
+  }, [slug, range]);
 
-  const selected = clientBySlug(clients, clientSlug) || clients[0];
-  const selectedName = selected?.name || "";
+  const selected = view === "client" ? clientBySlug(clients, slug) : undefined;
   const period = selected ? reportWindow(selected, range, bounds) : null;
   const periodLabel = period ? `${formatEntryDate(period.start)} – ${formatEntryDate(period.end)}` : "";
   const viewEntries = useMemo(
-    () => entriesFor(entries, clients, range, clientSlug, bounds),
-    [entries, clients, range, clientSlug, bounds]
+    () => (selected ? entriesFor(entries, clients, range, selected.slug, bounds) : []),
+    [entries, clients, range, selected, bounds]
   );
   const trend = useMemo(
-    () => contractTrend(entries, clients, clientSlug, bounds.asOf),
-    [entries, clients, clientSlug, bounds.asOf]
+    () => (selected ? contractTrend(entries, clients, selected.slug, bounds.asOf) : null),
+    [entries, clients, selected, bounds.asOf]
   );
+
+  function openClient(nextSlug: string) {
+    if (!nextSlug) return;
+    router.push(profitabilityHref(range, nextSlug));
+  }
+
+  function chooseRange(next: ProfitRange) {
+    if (next === range) return;
+    setRange(next);
+    router.replace(view === "client" && slug ? profitabilityHref(next, slug) : profitabilityHref(next), {
+      scroll: false,
+    });
+  }
   const buckets = useMemo(() => chartBuckets(range, viewEntries, bounds), [range, viewEntries, bounds]);
-  const slices = useMemo(() => donutSlices(viewEntries, clients, clientSlug), [viewEntries, clients, clientSlug]);
   const cards = useMemo(
     () =>
         clients.map((client) => {
@@ -78,26 +92,7 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
         }),
     [clients, entries, range, bounds]
   );
-  const visibleCards = showAllCards ? cards : cards.slice(0, cardColumns);
-  const hiddenCardCount = cards.length - visibleCards.length;
   const selectedCard = cards.find((card) => card.client.slug === selected?.slug);
-
-  const filteredEntries = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    const rows = [...viewEntries].sort((a, b) => b.date.localeCompare(a.date) || a.member.localeCompare(b.member));
-    if (!needle) return rows;
-    return rows.filter((entry) => {
-      const client = clientBySlug(clients, entry.clientSlug)?.name || "";
-      return [formatEntryDate(entry.date), entry.member, entry.task, entry.taskId, entry.description, client]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle);
-    });
-  }, [query, viewEntries, clients]);
-
-  const pageCount = Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE));
-  const safePage = Math.min(page, pageCount);
-  const pageRows = filteredEntries.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
     <div className="pr-page">
@@ -112,7 +107,12 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
         <div className="pr-controls">
           <label className="pr-field">
             <span>Client</span>
-            <select value={clientSlug} onChange={(event) => setClientSlug(event.target.value)}>
+            <select value={view === "client" ? slug : ""} onChange={(event) => openClient(event.target.value)}>
+              {view === "overview" ? (
+                <option value="" disabled>
+                  Select a client
+                </option>
+              ) : null}
               {clients.map((client) => (
                 <option key={client.slug} value={client.slug}>
                   {client.name}
@@ -127,7 +127,7 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
                 type="button"
                 className={range === item.id ? "active" : ""}
                 aria-pressed={range === item.id}
-                onClick={() => setRange(item.id)}
+                onClick={() => chooseRange(item.id)}
               >
                 {item.label}
               </button>
@@ -135,6 +135,8 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
           </div>
         </div>
       </header>
+      {view === "overview" ? (
+      <>
       <p className="pr-note">
         Logged hours are Tempo worklogs through {bounds.asOf}, summed the same way as the retainer report. This Month
         compares those hours with the monthly allocation from Brand Care Clients. This Quarter is the calendar quarter
@@ -148,24 +150,16 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
           budget.
         </li>
         <li>Billing rates are $0, so revenue, profit, and margin are not available.</li>
-        <li>Task names and Jira issue keys are not in Tempo. The table shows the numeric issue id.</li>
-        <li>Team labels are Tempo role names, not full Jira profiles.</li>
-        <li>
-          {coverage.describedCount} of {coverage.entryCount} entries have a worklog description.
-        </li>
       </ul>
 
       <section className="pr-cards-wrap">
       <div className="pr-cards" aria-label="Client retainer overview">
-        {visibleCards.map(({ client, logged, budget, pct, health, hasBudget }) => {
-          const selected = client.slug === clientSlug;
+        {cards.map(({ client, logged, budget, pct, health, hasBudget }) => {
           return (
-            <button
+            <Link
               key={client.slug}
-              type="button"
-              className={`pr-card ${selected ? "selected" : ""}`}
-              aria-pressed={selected}
-              onClick={() => setClientSlug(client.slug)}
+              href={profitabilityHref(range, client.slug)}
+              className="pr-card"
             >
               <div className="pr-card-top">
                 <strong>{client.name}</strong>
@@ -189,26 +183,22 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
                   style={{ width: `${hasBudget ? Math.min(pct, 100) : 0}%` }}
                 />
               </div>
-            </button>
+            </Link>
           );
         })}
       </div>
-        {hiddenCardCount > 0 || showAllCards ? (
-          <button
-            type="button"
-            className="pr-more"
-            aria-expanded={showAllCards}
-            onClick={() => setShowAllCards((open) => !open)}
-          >
-            {showAllCards ? "Show less" : `Show more (${hiddenCardCount})`}
-          </button>
-        ) : null}
       </section>
+      </>
+      ) : null}
 
+      {view === "client" && selected && trend ? (
       <section className="pr-dashboard" aria-label="Client report">
+        <Link href={profitabilityHref(range)} className="pr-back">
+          ← All clients
+        </Link>
         <div className="pr-section-label">
           <h2>
-            {selectedName}
+            {selected.name}
             {periodLabel ? <span> | {periodLabel}</span> : null}
           </h2>
         </div>
@@ -246,70 +236,9 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
               onActive={setActiveBar}
             />
           </article>
-          <article className="pr-panel">
-            <div className="pr-panel-head">
-              <h3>Time by team member</h3>
-            </div>
-            <DonutChart slices={slices} active={activeSlice} onActive={setActiveSlice} />
-          </article>
         </div>
-
-        <article className="pr-panel">
-          <div className="pr-panel-head">
-            <h3>Time entries</h3>
-            <label className="pr-search">
-              <span className="sr-only">Search entries</span>
-              <input
-                type="search"
-                value={query}
-                placeholder="Search member, task, or description"
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
-          </div>
-          <div className="pr-table-wrap">
-            <table className="pr-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Team Member</th>
-                  <th>Task / Work ID</th>
-                  <th>Description</th>
-                  <th>Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageRows.length ? (
-                  pageRows.map((entry) => (
-                    <EntryRow key={entry.id} entry={entry} />
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="pr-empty">
-                      No entries match that search.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="pr-pager">
-            <span>
-              {filteredEntries.length
-                ? `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, filteredEntries.length)} of ${filteredEntries.length}`
-                : "0 entries"}
-            </span>
-            <div>
-              <button type="button" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>
-                Previous
-              </button>
-              <button type="button" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}>
-                Next
-              </button>
-            </div>
-          </div>
-        </article>
       </section>
+      ) : null}
     </div>
   );
 }
@@ -345,23 +274,6 @@ function HoursSummary({
         <div className={`pr-fill ${budget ? health : "warn"}`} style={{ width: `${budget ? Math.min(pct, 100) : 0}%` }} />
       </div>
     </article>
-  );
-}
-
-function EntryRow({ entry }: { entry: TimeEntry }) {
-  return (
-    <tr>
-      <td>{formatEntryDate(entry.date)}</td>
-      <td>{entry.member}</td>
-      <td>
-        <span className="pr-task">
-          {entry.task}
-          <code>{entry.taskId}</code>
-        </span>
-      </td>
-      <td>{entry.description}</td>
-      <td className="pr-duration">{formatDuration(entry.minutes)}</td>
-    </tr>
   );
 }
 
@@ -434,92 +346,6 @@ function BarChart({
           </button>
         );
       })}
-    </div>
-  );
-}
-
-function DonutChart({
-  slices,
-  active,
-  onActive,
-}: {
-  slices: { label: string; minutes: number; color: string }[];
-  active: string | null;
-  onActive: (label: string | null) => void;
-}) {
-  const total = slices.reduce((sum, slice) => sum + slice.minutes, 0);
-  const radius = 68;
-  const circumference = 2 * Math.PI * radius;
-  let cursor = 0;
-  const activeSlice = slices.find((slice) => slice.label === active);
-
-  return (
-    <div className="pr-donut-wrap">
-      <div className="pr-donut">
-        <svg viewBox="0 0 200 200" role="img" aria-label="Time distribution">
-          <g transform="rotate(-90 100 100)">
-            {slices.map((slice) => {
-              const length = total ? (slice.minutes / total) * circumference : 0;
-              const gap = length > 6 ? 2 : 0;
-              const visible = Math.max(length - gap, 0);
-              const dash = `${visible} ${circumference - visible}`;
-              const offset = -cursor;
-              cursor += length;
-              return (
-                <circle
-                  key={slice.label}
-                  cx="100"
-                  cy="100"
-                  r={radius}
-                  fill="none"
-                  stroke={slice.color}
-                  strokeWidth="26"
-                  strokeDasharray={dash}
-                  strokeDashoffset={offset}
-                  opacity={!active || active === slice.label ? 1 : 0.35}
-                  onMouseEnter={() => onActive(slice.label)}
-                  onMouseLeave={() => onActive(null)}
-                />
-              );
-            })}
-          </g>
-          <text x="100" y="96" textAnchor="middle" className="pr-donut-value">
-            {formatHours(total / 60)}h
-          </text>
-          <text x="100" y="116" textAnchor="middle" className="pr-donut-sub">
-            logged
-          </text>
-        </svg>
-        {activeSlice ? (
-          <div className="pr-tip floating" role="tooltip">
-            <strong>{activeSlice.label}</strong>
-            {((activeSlice.minutes / total) * 100).toFixed(1)}% · {formatDuration(activeSlice.minutes)}
-          </div>
-        ) : null}
-      </div>
-      <ul className="pr-donut-legend">
-        {slices.map((slice) => {
-          const pct = total ? (slice.minutes / total) * 100 : 0;
-          return (
-            <li key={slice.label}>
-              <button
-                type="button"
-                className={active === slice.label ? "active" : ""}
-                onMouseEnter={() => onActive(slice.label)}
-                onMouseLeave={() => onActive(null)}
-                onFocus={() => onActive(slice.label)}
-                onBlur={() => onActive(null)}
-              >
-                <i style={{ background: slice.color }} />
-                <span>{slice.label}</span>
-                <em>
-                  {pct.toFixed(1)}% · {formatDuration(slice.minutes)}
-                </em>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
 }

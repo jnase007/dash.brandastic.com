@@ -2779,25 +2779,9 @@ code {
   width: 100%;
 }
 
-.pr-more {
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  color: #5b21b6;
-  border-radius: 999px;
-  padding: 8px 14px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.pr-more:hover {
-  border-color: #c4b5fd;
-  background: #f5f3ff;
-}
-
 .pr-card {
   text-align: left;
+  text-decoration: none;
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 16px;
@@ -2921,6 +2905,17 @@ code {
   min-width: 0;
 }
 
+.pr-back {
+  width: fit-content;
+  color: #6d28d9;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pr-back:hover {
+  color: #5b21b6;
+}
+
 .pr-section-label {
   display: flex;
   align-items: baseline;
@@ -3017,7 +3012,7 @@ code {
 
 .pr-charts {
   display: grid;
-  grid-template-columns: minmax(0, 1.85fr) minmax(280px, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
