@@ -1,5 +1,5 @@
-import type { ProfitabilityData, ProfitClient, TimeEntry } from "./profitability";
-import { monthLabel } from "./profitability";
+import type { ProfitabilityData, ProfitClient, RenewalKind, TimeEntry } from "./profitability";
+import { contractYearWindow, formatEntryDate } from "./profitability";
 
 const TEMPO_BASE = "https://api.tempo.io";
 const RETAINER_SHEET_CSV =
@@ -34,7 +34,8 @@ type TempoWorklog = {
 
 type TempoRole = { id: number | string; name: string };
 
-type Allocation = { name: string; hours: number | null };
+type SheetRenewal = { kind: RenewalKind; date?: string };
+type Allocation = { name: string; hours: number | null; renewal: SheetRenewal };
 
 let cache: { at: number; data: ProfitabilityData } | null = null;
 
@@ -68,27 +69,23 @@ async function loadTempoProfitability(): Promise<ProfitabilityData> {
     }
   }
 
-  const jiraIds = new Set<string>([...allocations.keys(), ...projectByJira.keys()]);
-  for (const [jiraId, project] of projectByJira) {
-    if (project.status !== "IN_PROGRESS" && !allocations.has(jiraId)) jiraIds.delete(jiraId);
+  if (allocations.size === 0) {
+    throw new Error("The Brand Care Clients sheet did not return any Jira project ids.");
   }
+  const jiraIds = [...allocations.keys()];
 
-  const loaded = await mapPool([...jiraIds], 4, async (jiraId) => {
+  const loaded = await mapPool(jiraIds, 4, async (jiraId) => {
     const project = projectByJira.get(jiraId);
     const allocation = allocations.get(jiraId);
-    let start = bounds.monthStart;
-    let end = asOf;
-    if (project?.timeframe?.self) {
-      const timeframe = await tempoGet<{ startDate?: string; endDate?: string }>(project.timeframe.self);
-      start = timeframe.startDate || start;
-      end = timeframe.endDate || end;
-    }
-    const from = start <= asOf ? start : bounds.monthStart;
+    const renewal = allocation?.renewal ?? { kind: "unknown" as const };
+    const renewalDate = renewal.kind === "date" ? renewal.date ?? null : null;
+    const window = contractYearWindow(renewal.kind, renewalDate, asOf);
+    const from = [bounds.weekStart, bounds.monthStart, window?.start].filter((date): date is string => Boolean(date)).sort()[0];
     const [labor, worklogs] = await Promise.all([
       project?.laborActuals?.self ? tempoOffset<TempoLabor>(project.laborActuals.self) : Promise.resolve([]),
       tempoOffset<TempoWorklog>(`/4/worklogs?projectId=${jiraId}&from=${from}&to=${asOf}`),
     ]);
-    return { jiraId, project, allocation, start, end, labor, worklogs };
+    return { jiraId, project, allocation, window, labor, worklogs };
   });
 
   const roleByAccount = new Map<string, { date: string; roleId: string }>();
@@ -118,16 +115,19 @@ async function loadTempoProfitability(): Promise<ProfitabilityData> {
     let slug = slugify(sourceName) || row.jiraId;
     if (usedSlugs.has(slug)) slug = `${slug}-${row.jiraId}`;
     usedSlugs.add(slug);
-    const renewalMonth = Number(row.start.slice(5, 7)) || Number(bounds.monthStart.slice(5, 7));
+    const renewal = row.allocation?.renewal ?? { kind: "unknown" as const };
+    const renewalDate = renewal.kind === "date" ? renewal.date ?? null : null;
     clients.push({
       slug,
       name: sourceName,
       budgetAmount: row.project?.budget?.amount?.value || 0,
       allocatedHours: row.allocation?.hours ?? null,
-      renewalMonth,
-      renewalLabel: monthLabel(renewalMonth),
-      contractStart: row.start,
-      contractEnd: row.end,
+      renewalKind: renewal.kind,
+      renewalDate,
+      renewalMonth: renewalDate ? Number(renewalDate.slice(5, 7)) : 0,
+      renewalLabel: renewalLabel(renewal.kind, renewalDate),
+      contractStart: row.window?.start || "",
+      contractEnd: row.window?.end || "",
     });
 
     for (const worklog of row.worklogs) {
@@ -181,10 +181,11 @@ async function loadAllocations(): Promise<Map<string, Allocation>> {
       const projectId = (row[11] || "").trim();
       const parsedHours = Number.parseFloat(row[12] || "");
       const hours = Number.isFinite(parsedHours) && parsedHours > 0 ? parsedHours : null;
+      const renewal = parseRenewal(row[2] || "");
       if (!projectId) continue;
       const existing = allocations.get(projectId);
       if (!existing) {
-        allocations.set(projectId, { name: name || projectId, hours });
+        allocations.set(projectId, { name: name || projectId, hours, renewal });
         continue;
       }
       const names = [existing.name, name].filter(Boolean);
@@ -192,6 +193,7 @@ async function loadAllocations(): Promise<Map<string, Allocation>> {
       allocations.set(projectId, {
         name: [...new Set(names)].join(" / "),
         hours: combined > 0 ? combined : null,
+        renewal: existing.renewal.kind === "unknown" ? renewal : existing.renewal,
       });
     }
   } catch {
@@ -230,6 +232,25 @@ function parseCsv(text: string) {
     rows.push(row);
   }
   return rows;
+}
+
+function parseRenewal(value: string): SheetRenewal {
+  const text = value.trim();
+  if (/^mtm$/i.test(text)) return { kind: "mtm" };
+  const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!match) return { kind: "unknown" };
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  let year = Number(match[3]);
+  if (year < 100) year += 2000;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return { kind: "unknown" };
+  return { kind: "date", date: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}` };
+}
+
+function renewalLabel(kind: RenewalKind, renewalDate: string | null) {
+  if (kind === "mtm") return "MTM";
+  if (kind === "date" && renewalDate) return formatEntryDate(renewalDate);
+  return "—";
 }
 
 function shortName(name: string) {

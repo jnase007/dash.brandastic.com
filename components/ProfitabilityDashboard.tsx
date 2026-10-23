@@ -31,10 +31,20 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
   const [page, setPage] = useState(1);
   const [activeSlice, setActiveSlice] = useState<string | null>(null);
   const [activeBar, setActiveBar] = useState<string | null>(null);
+  const [showAllCards, setShowAllCards] = useState(false);
+  const [cardColumns, setCardColumns] = useState(4);
 
   useEffect(() => {
     setPage(1);
   }, [query, clientSlug, range]);
+
+  useEffect(() => {
+    const wide = window.matchMedia("(min-width: 1281px)");
+    const apply = () => setCardColumns(wide.matches ? 4 : 2);
+    apply();
+    wide.addEventListener("change", apply);
+    return () => wide.removeEventListener("change", apply);
+  }, []);
 
   const selectedName = clientSlug === "all" ? "All Clients" : clientBySlug(clients, clientSlug)?.name || "All Clients";
   const viewEntries = useMemo(
@@ -57,9 +67,16 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
         const budget = hoursBudget(client, range, bounds);
         const pct = budget ? Math.round((logged / budget) * 1000) / 10 : 0;
         return { client, logged, budget, pct, health: burnHealth(pct), hasBudget: budget != null && budget > 0 };
-      }),
+      })
+        .sort((a, b) => {
+          if (a.hasBudget !== b.hasBudget) return a.hasBudget ? -1 : 1;
+          if (b.pct !== a.pct) return b.pct - a.pct;
+          return a.client.name.localeCompare(b.client.name);
+        }),
     [clients, entries, range, bounds]
   );
+  const visibleCards = showAllCards ? cards : cards.slice(0, cardColumns);
+  const hiddenCardCount = cards.length - visibleCards.length;
 
   const filteredEntries = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -126,12 +143,14 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
       </header>
       <p className="pr-note">
         Logged hours are Tempo worklogs through {bounds.asOf}, summed the same way as the retainer report. This Month
-        compares those hours with the monthly allocation from Brand Care Clients. All tracked time is billable.
+        compares those hours with the monthly allocation from Brand Care Clients. Contract Year uses column C: from
+        365 days before the renewal date through today, or through that date if it has already passed. MTM shows the
+        last 12 months, including this month. All tracked time is billable.
       </p>
       <ul className="pr-gaps">
         <li>
-          Monthly hour allocations for {coverage.allocatedCount} of {coverage.projectCount} clients come from the Brand
-          Care Clients sheet. Tempo does not store that hour budget.
+          Clients are the Jira project ids on the Brand Care Clients sheet. Tempo does not store the monthly hour
+          budget.
         </li>
         <li>Billing rates are $0, so revenue, profit, and margin are not available. The toggle shows labor cost.</li>
         <li>Task names and Jira issue keys are not in Tempo. The table shows the numeric issue id.</li>
@@ -142,8 +161,9 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
         </li>
       </ul>
 
-      <section className="pr-cards" aria-label="Client retainer overview">
-        {cards.map(({ client, logged, budget, pct, health, hasBudget }) => {
+      <section className="pr-cards-wrap">
+      <div className="pr-cards" aria-label="Client retainer overview">
+        {visibleCards.map(({ client, logged, budget, pct, health, hasBudget }) => {
           const selected = client.slug === clientSlug;
           return (
             <button
@@ -178,6 +198,17 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
             </button>
           );
         })}
+      </div>
+        {hiddenCardCount > 0 || showAllCards ? (
+          <button
+            type="button"
+            className="pr-more"
+            aria-expanded={showAllCards}
+            onClick={() => setShowAllCards((open) => !open)}
+          >
+            {showAllCards ? "Show less" : `Show more (${hiddenCardCount})`}
+          </button>
+        ) : null}
       </section>
 
       <section className="pr-dashboard" aria-label="Client report">

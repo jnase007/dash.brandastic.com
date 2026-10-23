@@ -6,11 +6,15 @@ export const PROFIT_RANGES = [
 
 export type ProfitRange = (typeof PROFIT_RANGES)[number]["id"];
 
+export type RenewalKind = "date" | "mtm" | "unknown";
+
 export type ProfitClient = {
   slug: string;
   name: string;
   budgetAmount: number;
   allocatedHours: number | null;
+  renewalKind: RenewalKind;
+  renewalDate: string | null;
   renewalMonth: number;
   renewalLabel: string;
   contractStart: string;
@@ -68,10 +72,27 @@ export function entriesFor(
     if (clientSlug !== "all" && entry.clientSlug !== clientSlug) return false;
     const client = bySlug.get(entry.clientSlug);
     if (!client) return false;
+    if (range === "year" && !client.contractStart) return false;
     const start =
       range === "week" ? bounds.weekStart : range === "month" ? bounds.monthStart : client.contractStart;
-    return entry.date >= start && entry.date <= bounds.asOf;
+    const end = range === "year" ? client.contractEnd : bounds.asOf;
+    return entry.date >= start && entry.date <= end;
   });
+}
+
+export function contractYearWindow(kind: RenewalKind, renewalDate: string | null, asOf: string) {
+  if (kind === "mtm") return { start: shiftMonths(asOf, -11), end: asOf };
+  if (kind === "date" && renewalDate) {
+    const start = addDays(renewalDate, -365);
+    return { start, end: renewalDate < asOf ? renewalDate : asOf };
+  }
+  return null;
+}
+
+export function contractMonths(client: ProfitClient) {
+  if (!client.contractStart || !client.contractEnd) return null;
+  if (client.renewalKind === "mtm") return 12;
+  return elapsedContractMonths(client.contractStart, client.contractEnd);
 }
 
 export type HourSummary = {
@@ -98,7 +119,8 @@ export function hoursBudget(client: ProfitClient, range: ProfitRange, bounds: Da
     const dim = daysInMonth(bounds.asOf);
     return monthly * (days / dim);
   }
-  return monthly * elapsedContractMonths(client.contractStart, bounds.asOf);
+  const months = contractMonths(client);
+  return months == null ? null : monthly * months;
 }
 
 export function elapsedContractMonths(start: string, asOf: string) {
@@ -123,11 +145,16 @@ export function contractTrend(
   asOf: string
 ): TrendSummary {
   const list = clientSlug === "all" ? clients : clients.filter((client) => client.slug === clientSlug);
-  const averages = list.map((client) => {
+  const averages = list.flatMap((client) => {
+    const months = contractMonths(client);
+    if (months == null) return [];
     const minutes = entries
-      .filter((entry) => entry.clientSlug === client.slug && entry.date >= client.contractStart && entry.date <= asOf)
+      .filter(
+        (entry) =>
+          entry.clientSlug === client.slug && entry.date >= client.contractStart && entry.date <= client.contractEnd
+      )
       .reduce((sum, entry) => sum + entry.minutes, 0);
-    return minutes / 60 / elapsedContractMonths(client.contractStart, asOf);
+    return [minutes / 60 / months];
   });
   const allocations = list
     .map((client) => client.allocatedHours)
@@ -146,17 +173,23 @@ function mean(values: number[]) {
 
 function nextRenewalLabel(clients: ProfitClient[], asOf: string) {
   const upcoming = clients
-    .map((client) => nextAnniversary(client.contractStart, asOf))
+    .filter((client) => client.renewalKind === "date" && client.renewalDate && client.renewalDate >= asOf)
+    .map((client) => client.renewalDate as string)
     .sort()[0];
-  if (!upcoming) return "—";
-  return MONTHS[Number(upcoming.slice(5, 7)) - 1];
+  return upcoming ? formatEntryDate(upcoming) : "—";
 }
 
-function nextAnniversary(start: string, asOf: string) {
-  const monthDay = start.slice(5);
-  const year = Number(asOf.slice(0, 4));
-  const candidate = `${year}-${monthDay}`;
-  return candidate >= asOf ? candidate : `${year + 1}-${monthDay}`;
+function addDays(iso: string, days: number) {
+  const [year, month, day] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function shiftMonths(iso: string, monthDelta: number) {
+  const [year, month] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + monthDelta, 1));
+  return date.toISOString().slice(0, 10);
 }
 
 export type ChartBucket = {

@@ -2815,10 +2815,34 @@ code {
   gap: 4px;
 }
 
+.pr-cards-wrap {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+
 .pr-cards {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+  width: 100%;
+}
+
+.pr-more {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #5b21b6;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pr-more:hover {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
 }
 
 .pr-card {
