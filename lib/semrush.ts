@@ -120,8 +120,7 @@ async function semrushGet(params: Record<string, string>) {
   const url = `https://api.semrush.com/?${qs.toString()}`;
   const res = await fetch(url, {
     method: "GET",
-    cache: "no-store",
-    next: { revalidate: 0 },
+    next: { revalidate: 300 },
   } as RequestInit);
   const text = await res.text();
   if (!res.ok) throw new Error(`Semrush HTTP ${res.status}: ${text.slice(0, 180)}`);

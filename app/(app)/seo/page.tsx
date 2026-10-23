@@ -5,6 +5,7 @@ import { money, num } from "@/lib/format";
 import { getPortfolioSemrushSeo, semrushConfigured } from "@/lib/semrush";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 120;
 
 export default async function SeoPortfolioPage() {
   const data = await getPortfolioSemrushSeo({ keywordLimit: 5 });

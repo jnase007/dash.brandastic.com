@@ -15,7 +15,7 @@ import { compactRangeLabel, money, normalizeRange, num, ratio } from "@/lib/form
 import { getClientLogoMap } from "@/lib/logos";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 120;
 
 export default async function ClientsPage({
   searchParams,

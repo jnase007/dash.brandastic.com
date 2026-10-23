@@ -3,7 +3,7 @@ import { APPROVAL_ITEMS, type ApprovalStatus } from "@/lib/approvals";
 import { list } from "@vercel/blob";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 120;
 
 type StateMap = Record<
   string,

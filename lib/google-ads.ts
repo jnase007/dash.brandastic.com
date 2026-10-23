@@ -38,7 +38,7 @@ async function getAccessToken() {
       refresh_token: process.env.GOOGLE_ADS_REFRESH_TOKEN || "",
       grant_type: "refresh_token",
     }),
-    cache: "no-store",
+    next: { revalidate: 300 },
   });
   const json = await readJsonResponse(res, "Google OAuth token");
   if (!res.ok || !json.access_token) {
@@ -92,7 +92,7 @@ export async function fetchGoogleCustomerInsights(customerId: string, range: str
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ query }),
-      cache: "no-store",
+      next: { revalidate: 300 },
     }
   );
 
@@ -263,7 +263,7 @@ export async function listGoogleAccessibleCustomers() {
         "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "",
         "Content-Type": "application/json",
       },
-      cache: "no-store",
+      next: { revalidate: 300 },
     }
   );
   const json = await readJsonResponse(res, "Google Ads customers");
@@ -307,7 +307,7 @@ export async function listGoogleMccClients(mccId?: string) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ query }),
-      cache: "no-store",
+      next: { revalidate: 300 },
     }
   );
   const json = await readJsonResponse(res, "Google Ads MCC clients");
@@ -354,7 +354,7 @@ async function googleSearchStream(customerId: string, query: string) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ query }),
-      cache: "no-store",
+      next: { revalidate: 300 },
     }
   );
   const json = await readJsonResponse(res, "Google Ads searchStream");

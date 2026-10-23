@@ -81,7 +81,7 @@ export function ClientLogo({
         const res = await fetch(`/api/logos/${encodeURIComponent(slug)}`, {
           method: "GET",
           credentials: "same-origin",
-          cache: "no-store",
+          next: { revalidate: 3600 },
         });
         const text = await res.text();
         const json = text ? JSON.parse(text) : null;

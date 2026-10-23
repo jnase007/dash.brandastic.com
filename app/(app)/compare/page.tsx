@@ -17,7 +17,7 @@ import {
 } from "@/lib/metric-columns";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 120;
 
 function deltaClass(key: MetricKey, direction: "up" | "down" | "flat" | "na") {
   if (direction === "na" || direction === "flat") return "muted";

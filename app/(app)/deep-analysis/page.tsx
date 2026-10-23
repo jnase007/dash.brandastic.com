@@ -20,7 +20,7 @@ import {
 import { METRIC_COLUMNS, formatMetricCell } from "@/lib/metric-columns";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 120;
 
 export default async function DeepAnalysisPage({
   searchParams,
