@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ProfitabilityDashboard } from "@/components/ProfitabilityDashboard";
 import { clientBySlug, profitRange } from "@/lib/profitability";
-import { getTempoProfitability } from "@/lib/tempo";
+import { getTempoProfitabilityForSlug } from "@/lib/tempo";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export async function generateMetadata({
   params,
@@ -12,14 +13,12 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  try {
-    const data = await getTempoProfitability();
-    const client = clientBySlug(data.clients, slug);
-    if (!client) return { title: "Client not found · Brandastic Ads Dash" };
-    return { title: `${client.name} · Client Reports & Profitability · Brandastic Ads Dash` };
-  } catch {
-    return { title: "Client Reports & Profitability · Brandastic Ads Dash" };
-  }
+  const label = slug
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+  return { title: `${label || "Client"} · Client Reports & Profitability · Brandastic Ads Dash` };
 }
 
 export default async function ProfitabilityClientPage({
@@ -33,7 +32,7 @@ export default async function ProfitabilityClientPage({
   const { range } = await searchParams;
   let data;
   try {
-    data = await getTempoProfitability();
+    data = await getTempoProfitabilityForSlug(slug);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Tempo could not be loaded.";
     return (

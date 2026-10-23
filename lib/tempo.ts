@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import type { ProfitabilityData, ProfitClient, RenewalKind, TimeEntry } from "./profitability";
 import { contractYearWindow, formatEntryDate, quarterStartDate } from "./profitability";
 
@@ -39,14 +40,53 @@ type Allocation = { name: string; hours: number | null; renewal: SheetRenewal };
 
 let cache: { at: number; data: ProfitabilityData } | null = null;
 
+const loadCachedTempoProfitability = unstable_cache(
+  async () => loadTempoProfitability(),
+  ["tempo-profitability-v2"],
+  { revalidate: 300, tags: ["tempo-profitability"] }
+);
+
 export async function getTempoProfitability(): Promise<ProfitabilityData> {
   if (cache && Date.now() - cache.at < 5 * 60 * 1000) return cache.data;
-  const data = await loadTempoProfitability();
+  const data = await loadCachedTempoProfitability();
   cache = { at: Date.now(), data };
   return data;
 }
 
-async function loadTempoProfitability(): Promise<ProfitabilityData> {
+/** Faster client pages: only pull Tempo labor/worklogs for matching retainer rows. */
+export async function getTempoProfitabilityForSlug(slug: string): Promise<ProfitabilityData> {
+  if (cache && Date.now() - cache.at < 5 * 60 * 1000) {
+    const filtered = filterProfitData(cache.data, slug);
+    if (filtered.clients.length > 0) return filtered;
+  }
+  try {
+    // Load only matching retainer projects (much fewer Tempo calls than full portfolio).
+    return await loadTempoProfitability({ slug });
+  } catch {
+    const full = await getTempoProfitability();
+    return filterProfitData(full, slug);
+  }
+}
+
+function filterProfitData(data: ProfitabilityData, slug: string): ProfitabilityData {
+  const clients = data.clients.filter((client) => client.slug === slug);
+  const entries = data.entries.filter((entry) => entry.clientSlug === slug);
+  return {
+    ...data,
+    clients,
+    entries,
+    coverage: {
+      ...data.coverage,
+      projectCount: clients.length,
+      entryCount: entries.length,
+      describedCount: entries.filter((entry) => entry.description && entry.description !== "No description in Tempo").length,
+      costedCount: entries.filter((entry) => entry.cost > 0).length,
+      allocatedCount: clients.filter((client) => client.allocatedHours != null).length,
+    },
+  };
+}
+
+async function loadTempoProfitability(opts?: { slug?: string }): Promise<ProfitabilityData> {
   const asOf = losAngelesDate();
   const bounds = {
     asOf,
@@ -72,9 +112,21 @@ async function loadTempoProfitability(): Promise<ProfitabilityData> {
   if (allocations.size === 0) {
     throw new Error("The Brand Care Clients sheet did not return any Jira project ids.");
   }
-  const jiraIds = [...allocations.keys()];
+  let jiraIds = [...allocations.keys()];
+  if (opts?.slug) {
+    const wanted = opts.slug.toLowerCase();
+    jiraIds = jiraIds.filter((jiraId) => {
+      const allocation = allocations.get(jiraId);
+      const name = allocation?.name || "";
+      const slug = slugify(name) || jiraId;
+      return slug === wanted || slug.startsWith(wanted + "-") || name.toLowerCase().includes(wanted.replace(/-/g, " "));
+    });
+    if (jiraIds.length === 0) {
+      throw new Error(`No retainer row matched slug "${opts.slug}"`);
+    }
+  }
 
-  const loaded = await mapPool(jiraIds, 4, async (jiraId) => {
+  const loaded = await mapPool(jiraIds, 8, async (jiraId) => {
     const project = projectByJira.get(jiraId);
     const allocation = allocations.get(jiraId);
     const renewal = allocation?.renewal ?? { kind: "unknown" as const };
@@ -171,7 +223,7 @@ async function loadTempoProfitability(): Promise<ProfitabilityData> {
 async function loadAllocations(): Promise<Map<string, Allocation>> {
   const allocations = new Map<string, Allocation>();
   try {
-    const response = await fetch(RETAINER_SHEET_CSV, { cache: "no-store", redirect: "follow" });
+    const response = await fetch(RETAINER_SHEET_CSV, { next: { revalidate: 300 }, redirect: "follow" });
     if (!response.ok) return allocations;
     const text = await response.text();
     if (!text.includes("Jira Project ID")) return allocations;
@@ -273,8 +325,8 @@ async function tempoGet<T>(path: string): Promise<T> {
   const token = process.env.TEMPO_API_TOKEN;
   if (!token) throw new Error("TEMPO_API_TOKEN is not set");
   const response = await fetch(path.startsWith("http") ? path : `${TEMPO_BASE}${path}`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    cache: "no-store",
+    headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+    next: { revalidate: 300 },
   });
   if (!response.ok) {
     throw new Error(`Tempo request failed (${response.status})`);
