@@ -14,6 +14,8 @@ import {
   formatHours,
   hoursBudget,
   moneyExact,
+  reportWindow,
+  contractTermLabel,
   summarize,
   type ProfitabilityData,
   type ProfitRange,
@@ -25,7 +27,7 @@ const PAGE_SIZE = 8;
 export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
   const { clients, entries, bounds, coverage } = data;
   const [range, setRange] = useState<ProfitRange>("month");
-  const [clientSlug, setClientSlug] = useState("all");
+  const [clientSlug, setClientSlug] = useState(clients[0]?.slug ?? "");
   const [showProfit, setShowProfit] = useState(false);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -46,7 +48,10 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
     return () => wide.removeEventListener("change", apply);
   }, []);
 
-  const selectedName = clientSlug === "all" ? "All Clients" : clientBySlug(clients, clientSlug)?.name || "All Clients";
+  const selected = clientBySlug(clients, clientSlug) || clients[0];
+  const selectedName = selected?.name || "";
+  const period = selected ? reportWindow(selected, range, bounds) : null;
+  const periodLabel = period ? `${formatEntryDate(period.start)} – ${formatEntryDate(period.end)}` : "";
   const viewEntries = useMemo(
     () => entriesFor(entries, clients, range, clientSlug, bounds),
     [entries, clients, range, clientSlug, bounds]
@@ -77,6 +82,7 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
   );
   const visibleCards = showAllCards ? cards : cards.slice(0, cardColumns);
   const hiddenCardCount = cards.length - visibleCards.length;
+  const selectedCard = cards.find((card) => card.client.slug === selected?.slug);
 
   const filteredEntries = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -109,7 +115,6 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
           <label className="pr-field">
             <span>Client</span>
             <select value={clientSlug} onChange={(event) => setClientSlug(event.target.value)}>
-              <option value="all">All Clients</option>
               {clients.map((client) => (
                 <option key={client.slug} value={client.slug}>
                   {client.name}
@@ -171,7 +176,7 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
               type="button"
               className={`pr-card ${selected ? "selected" : ""}`}
               aria-pressed={selected}
-              onClick={() => setClientSlug(selected ? "all" : client.slug)}
+              onClick={() => setClientSlug(client.slug)}
             >
               <div className="pr-card-top">
                 <strong>{client.name}</strong>
@@ -213,22 +218,20 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
 
       <section className="pr-dashboard" aria-label="Client report">
         <div className="pr-section-label">
-          <h2>{selectedName}</h2>
-          {clientSlug !== "all" ? (
-            <button type="button" className="pr-clear" onClick={() => setClientSlug("all")}>
-              Show all clients
-            </button>
-          ) : null}
+          <h2>
+            {selectedName}
+            {periodLabel ? <span> | {periodLabel}</span> : null}
+          </h2>
         </div>
 
         <div className="pr-kpis">
+          <HoursSummary
+            logged={selectedCard?.logged ?? 0}
+            budget={selectedCard?.hasBudget ? selectedCard.budget : null}
+            budgetLabel={range === "month" ? "Allocated" : range === "week" ? "This week" : "Contract hrs"}
+          />
           <article className="pr-kpi">
-            <span>Total Hours</span>
-            <strong>{formatDuration(summary.totalMinutes)}</strong>
-            <small>{PROFIT_RANGES.find((item) => item.id === range)?.label}</small>
-          </article>
-          <article className="pr-kpi">
-            <span>Contract YTD Average</span>
+            <span>Monthly pace</span>
             <strong>{trend.averageHours.toFixed(1)} hrs / mo</strong>
             {trend.allocatedHours != null ? (
               <small className={trend.averageHours > trend.allocatedHours ? "over" : "under"}>
@@ -237,7 +240,7 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
             ) : (
               <small>No monthly allocation</small>
             )}
-            <em>{clientSlug === "all" ? `Next renewal: ${trend.renewalLabel}` : `Renewal: ${trend.renewalLabel}`}</em>
+            <em>{selected ? contractTermLabel(selected) : ""}</em>
           </article>
           <article className={`pr-kpi profit ${showProfit ? "" : "hidden"}`}>
             <span>Labor cost</span>
@@ -260,11 +263,18 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
             <div className="pr-panel-head">
               <h3>Tracked time</h3>
             </div>
-            <BarChart buckets={buckets} active={activeBar} onActive={setActiveBar} />
+            <BarChart
+              buckets={buckets}
+              allocationMinutes={
+                range === "year" && selected?.allocatedHours ? selected.allocatedHours * 60 : null
+              }
+              active={activeBar}
+              onActive={setActiveBar}
+            />
           </article>
           <article className="pr-panel">
             <div className="pr-panel-head">
-              <h3>{clientSlug === "all" ? "Client distribution" : "Time by team member"}</h3>
+              <h3>Time by team member</h3>
             </div>
             <DonutChart slices={slices} active={activeSlice} onActive={setActiveSlice} />
           </article>
@@ -288,7 +298,6 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
               <thead>
                 <tr>
                   <th>Date</th>
-                  {clientSlug === "all" ? <th>Client</th> : null}
                   <th>Team Member</th>
                   <th>Task / Work ID</th>
                   <th>Description</th>
@@ -298,16 +307,11 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
               <tbody>
                 {pageRows.length ? (
                   pageRows.map((entry) => (
-                    <EntryRow
-                      key={entry.id}
-                      entry={entry}
-                      clientName={clientBySlug(clients, entry.clientSlug)?.name}
-                      showClient={clientSlug === "all"}
-                    />
+                    <EntryRow key={entry.id} entry={entry} />
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={clientSlug === "all" ? 6 : 5} className="pr-empty">
+                    <td colSpan={5} className="pr-empty">
                       No entries match that search.
                     </td>
                   </tr>
@@ -336,19 +340,44 @@ export function ProfitabilityDashboard({ data }: { data: ProfitabilityData }) {
   );
 }
 
-function EntryRow({
-  entry,
-  showClient,
-  clientName,
+function HoursSummary({
+  logged,
+  budget,
+  budgetLabel,
 }: {
-  entry: TimeEntry;
-  showClient: boolean;
-  clientName?: string;
+  logged: number;
+  budget: number | null;
+  budgetLabel: string;
 }) {
+  const pct = budget ? Math.round((logged / budget) * 1000) / 10 : 0;
+  const health = burnHealth(pct);
+  return (
+    <article className="pr-kpi pr-kpi-burn">
+      <div className="pr-card-top">
+        <span>Total hours</span>
+        <span className={`pr-burn ${budget ? health : "warn"}`}>{budget ? `${formatHours(pct)}%` : "No allocation"}</span>
+      </div>
+      <div className="pr-card-hours">
+        <span>
+          <em>{budget != null ? `${formatHours(budget)} hrs` : "—"}</em>
+          {budgetLabel}
+        </span>
+        <span>
+          <em>{formatHours(logged)} hrs</em>
+          Logged
+        </span>
+      </div>
+      <div className="pr-track" aria-hidden>
+        <div className={`pr-fill ${budget ? health : "warn"}`} style={{ width: `${budget ? Math.min(pct, 100) : 0}%` }} />
+      </div>
+    </article>
+  );
+}
+
+function EntryRow({ entry }: { entry: TimeEntry }) {
   return (
     <tr>
       <td>{formatEntryDate(entry.date)}</td>
-      {showClient ? <td>{clientName}</td> : null}
       <td>{entry.member}</td>
       <td>
         <span className="pr-task">
@@ -364,17 +393,23 @@ function EntryRow({
 
 function BarChart({
   buckets,
+  allocationMinutes,
   active,
   onActive,
 }: {
   buckets: { key: string; label: string; minutes: number }[];
+  allocationMinutes: number | null;
   active: string | null;
   onActive: (key: string | null) => void;
 }) {
   const max = Math.max(...buckets.map((bucket) => bucket.minutes), 1);
+  const split = allocationMinutes != null && allocationMinutes > 0;
   return (
     <div className="pr-bars">
       {buckets.map((bucket) => {
+        const within = split ? Math.min(bucket.minutes, allocationMinutes) : bucket.minutes;
+        const over = split ? Math.max(0, bucket.minutes - allocationMinutes) : 0;
+        const height = `${(bucket.minutes / max) * 100}%`;
         return (
           <button
             key={bucket.key}
@@ -386,7 +421,19 @@ function BarChart({
             onBlur={() => onActive(null)}
           >
             <span className="pr-bar-stack">
-              <span className="bill" style={{ height: `${(bucket.minutes / max) * 100}%` }} />
+              {split ? (
+                <span className="pr-bar-col" style={{ height }}>
+                  <span className="pr-bar-value">{formatHours(bucket.minutes / 60)}h</span>
+                  {over > 0 ? <span className="pr-bar-over" style={{ flexGrow: over }} /> : null}
+                  {within > 0 ? (
+                    <span className={`pr-bar-within ${over > 0 ? "split" : "solo"}`} style={{ flexGrow: within }} />
+                  ) : null}
+                </span>
+              ) : (
+                <span className="bill" style={{ height }}>
+                  <span className="pr-bar-value">{formatHours(bucket.minutes / 60)}h</span>
+                </span>
+              )}
             </span>
             <span className="pr-bar-label">{bucket.label}</span>
             {active === bucket.key ? (
@@ -395,6 +442,12 @@ function BarChart({
                 {formatHours(bucket.minutes / 60)}h
                 <br />
                 {formatDuration(bucket.minutes)}
+                {split ? (
+                  <>
+                    <br />
+                    {formatHours(allocationMinutes / 60)}h allocated
+                  </>
+                ) : null}
               </span>
             ) : null}
           </button>

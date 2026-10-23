@@ -60,6 +60,21 @@ export function clientBySlug(clients: ProfitClient[], slug: string) {
   return clients.find((client) => client.slug === slug);
 }
 
+export function reportWindow(client: ProfitClient, range: ProfitRange, bounds: DateBounds) {
+  if (range === "week") return { start: bounds.weekStart, end: bounds.asOf };
+  if (range === "month") return { start: bounds.monthStart, end: bounds.asOf };
+  if (!client.contractStart || !client.contractEnd) return null;
+  return { start: client.contractStart, end: client.contractEnd };
+}
+
+export function contractTermLabel(client: ProfitClient) {
+  if (client.renewalKind === "mtm") return "Month to month";
+  if (client.renewalKind === "date" && client.renewalDate && client.contractStart) {
+    return `Contract: ${formatEntryDate(client.contractStart)} – ${formatEntryDate(client.renewalDate)}`;
+  }
+  return "Contract dates are not on the sheet";
+}
+
 export function entriesFor(
   entries: TimeEntry[],
   clients: ProfitClient[],
@@ -226,9 +241,13 @@ export function chartBuckets(range: ProfitRange, entries: TimeEntry[], bounds: D
     list.push(entry);
     groups.set(key, list);
   }
-  return [...groups.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, list]) => bucket(key, MONTHS[Number(key.slice(5, 7)) - 1], list));
+  const months = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const spansYears = new Set(months.map(([key]) => key.slice(0, 4))).size > 1;
+  return months.map(([key, list]) => {
+    const month = MONTHS[Number(key.slice(5, 7)) - 1];
+    const label = spansYears ? `${month} '${key.slice(2, 4)}` : month;
+    return bucket(key, label, list);
+  });
 }
 
 function eachDate(start: string, end: string) {
