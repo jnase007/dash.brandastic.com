@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { CommandPalette } from "@/components/CommandPalette";
 
 export function TopChrome({
@@ -7,6 +8,9 @@ export function TopChrome({
 }: {
   clients: { name: string; slug: string }[];
 }) {
+  const pathname = usePathname();
+  if (pathname === "/profitability" || pathname.startsWith("/profitability/")) return null;
+
   return (
     <div className="top-chrome">
       <div className="top-chrome-left">

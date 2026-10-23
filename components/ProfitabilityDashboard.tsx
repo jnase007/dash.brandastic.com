@@ -83,7 +83,15 @@ export function ProfitabilityDashboard({
         const logged = Math.round(loggedRaw * 10) / 10;
         const budget = hoursBudget(client, range, bounds);
         const pct = budget ? Math.round((logged / budget) * 1000) / 10 : 0;
-        return { client, logged, budget, pct, health: burnHealth(pct), hasBudget: budget != null && budget > 0 };
+        return {
+          client,
+          logged,
+          loggedRaw,
+          budget,
+          pct,
+          health: burnHealth(pct),
+          hasBudget: budget != null && budget > 0,
+        };
       })
         .sort((a, b) => {
           if (a.hasBudget !== b.hasBudget) return a.hasBudget ? -1 : 1;
@@ -93,6 +101,16 @@ export function ProfitabilityDashboard({
     [clients, entries, range, bounds]
   );
   const selectedCard = cards.find((card) => card.client.slug === selected?.slug);
+  const budgetLabel = range === "month" ? "Allocated" : range === "quarter" ? "Quarter hrs" : "Contract hrs";
+  const portfolioCards = cards.filter((card) => card.client.slug !== "brandastic");
+  const totalLogged = portfolioCards.reduce((sum, card) => sum + card.loggedRaw, 0);
+  const totalBudget = portfolioCards.reduce(
+    (sum, card) => sum + (card.hasBudget && card.budget != null ? card.budget : 0),
+    0
+  );
+  const totalHasBudget = totalBudget > 0;
+  const totalPct = totalHasBudget ? (totalLogged / totalBudget) * 100 : 0;
+  const totalHealth = burnHealth(totalPct);
 
   return (
     <div className="pr-page">
@@ -136,23 +154,32 @@ export function ProfitabilityDashboard({
         </div>
       </header>
       {view === "overview" ? (
-      <>
-      <p className="pr-note">
-        Logged hours are Tempo worklogs through {bounds.asOf}, summed the same way as the retainer report. This Month
-        compares those hours with the monthly allocation from Brand Care Clients. This Quarter is the calendar quarter
-        through today, using that allocation for each month already underway. Contract Year uses column C: from
-        365 days before the renewal date through today, or through that date if it has already passed. MTM shows the
-        last 12 months, including this month. All tracked time is billable.
-      </p>
-      <ul className="pr-gaps">
-        <li>
-          Clients are the Jira project ids on the Brand Care Clients sheet. Tempo does not store the monthly hour
-          budget.
-        </li>
-        <li>Billing rates are $0, so revenue, profit, and margin are not available.</li>
-      </ul>
-
       <section className="pr-cards-wrap">
+      <article className="pr-card pr-card-total" aria-label="All Clients (minus Brandastic)">
+        <div className="pr-card-top">
+          <strong>All Clients (minus Brandastic)</strong>
+          <span className={`pr-burn ${totalHasBudget ? totalHealth : "warn"}`}>
+            {totalHasBudget ? `${formatPct(totalPct)}%` : "No allocation"}
+          </span>
+        </div>
+        <div className="pr-card-hours">
+          <span>
+            <em>{formatHours(totalLogged)}</em>
+            Logged
+          </span>
+          <span>
+            <em>{totalHasBudget ? formatHours(totalBudget) : "—"}</em>
+            {budgetLabel}
+          </span>
+        </div>
+        <div className="pr-track" aria-hidden>
+          <div
+            className={`pr-fill ${totalHasBudget ? totalHealth : "warn"}`}
+            style={{ width: `${totalHasBudget ? Math.min(totalPct, 100) : 0}%` }}
+          />
+        </div>
+      </article>
+      <div className="pr-cards-sep" role="separator" />
       <div className="pr-cards" aria-label="Client retainer overview">
         {cards.map(({ client, logged, budget, pct, health, hasBudget }) => {
           return (
@@ -174,7 +201,7 @@ export function ProfitabilityDashboard({
                 </span>
                 <span>
                   <em>{hasBudget && budget != null ? formatHours(budget) : "—"}</em>
-                  {range === "month" ? "Allocated" : range === "quarter" ? "Quarter hrs" : "Contract hrs"}
+                  {budgetLabel}
                 </span>
               </div>
               <div className="pr-track" aria-hidden>
@@ -188,7 +215,6 @@ export function ProfitabilityDashboard({
         })}
       </div>
       </section>
-      </>
       ) : null}
 
       {view === "client" && selected && trend ? (
@@ -207,7 +233,7 @@ export function ProfitabilityDashboard({
           <HoursSummary
             logged={selectedCard?.logged ?? 0}
             budget={selectedCard?.hasBudget ? selectedCard.budget : null}
-            budgetLabel={range === "month" ? "Allocated" : range === "quarter" ? "Quarter hrs" : "Contract hrs"}
+            budgetLabel={budgetLabel}
           />
           <article className="pr-kpi">
             <span>Monthly pace</span>
@@ -334,7 +360,7 @@ function BarChart({
             {active === bucket.key ? (
               <span className="pr-tip" role="tooltip">
                 <strong>{bucket.label}</strong>
-                {formatHours(bucket.minutes / 60)}h
+                {formatHours(bucket.minutes / 60)}h tracked
                 {hasLine ? (
                   <>
                     <br />
