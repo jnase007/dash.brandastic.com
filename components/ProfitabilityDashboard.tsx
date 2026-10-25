@@ -135,13 +135,26 @@ export function ProfitabilityDashboard({
         entriesFor(entries, clients, range, "all", bounds).filter((entry) => entry.clientSlug !== "brandastic"),
         data.costRates || [],
         range,
-        bounds
+        bounds,
+        data.monthlyOverhead ?? null,
+        data.payingAllocatedHours || 0
       ),
-    [clients, entries, range, bounds, data.costRates]
+    [clients, entries, range, bounds, data.costRates, data.monthlyOverhead, data.payingAllocatedHours]
   );
   const clientProfit = useMemo(
-    () => (selected ? directProfit([selected], viewEntries, data.costRates || [], range, bounds) : null),
-    [selected, viewEntries, data.costRates, range, bounds]
+    () =>
+      selected
+        ? directProfit(
+            [selected],
+            viewEntries,
+            data.costRates || [],
+            range,
+            bounds,
+            data.monthlyOverhead ?? null,
+            data.payingAllocatedHours || 0
+          )
+        : null,
+    [selected, viewEntries, data.costRates, range, bounds, data.monthlyOverhead, data.payingAllocatedHours]
   );
 
   return (
@@ -319,8 +332,8 @@ export function ProfitabilityDashboard({
 
 function MoneyKpis({ profit }: { profit: DirectProfit }) {
   return (
-    <section className="pr-profit" aria-label="Direct labor profit">
-      <p>Revenue minus direct labor. This is not net profit after overhead.</p>
+    <section className="pr-profit" aria-label="Profit after overhead">
+      <p>Revenue minus direct labor and overhead.</p>
       <div className="pr-kpis pr-profit-kpis">
         <article className="pr-kpi">
           <span>Revenue</span>
@@ -334,6 +347,17 @@ function MoneyKpis({ profit }: { profit: DirectProfit }) {
             {profit.uncostedHours > 0
               ? `${formatHours(profit.uncostedHours)}h missing a cost rate`
               : "Hours logged × hourly cost"}
+          </small>
+        </article>
+        <article className="pr-kpi">
+          <span>Overhead</span>
+          <strong>{profit.overhead == null ? "—" : formatMoney(profit.overhead)}</strong>
+          <small>
+            {profit.overheadHours != null && profit.overheadBaseHours
+              ? profit.overheadHours === profit.overheadBaseHours
+                ? "All allocated hours"
+                : `${formatHours(profit.overheadHours)} of ${formatHours(profit.overheadBaseHours)} allocated hours`
+              : "Paying clients only"}
           </small>
         </article>
         <article className="pr-kpi">

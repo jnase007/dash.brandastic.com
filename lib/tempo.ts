@@ -45,24 +45,25 @@ type TempoTeamMember = {
 type SheetRenewal = { kind: RenewalKind; date?: string };
 type Allocation = { name: string; hours: number | null; renewal: SheetRenewal; billableRate: number | null };
 
-let cache: { at: number; data: ProfitabilityData } | null = null;
+const DATA_VERSION = 6;
+let cache: { at: number; version: number; data: ProfitabilityData } | null = null;
 
 const loadCachedTempoProfitability = unstable_cache(
   async () => loadTempoProfitability(),
-  ["tempo-profitability-v3"],
+  ["tempo-profitability-v6"],
   { revalidate: 300, tags: ["tempo-profitability"] }
 );
 
 export async function getTempoProfitability(): Promise<ProfitabilityData> {
-  if (cache && Date.now() - cache.at < 5 * 60 * 1000) return cache.data;
+  if (cache && cache.version === DATA_VERSION && Date.now() - cache.at < 5 * 60 * 1000) return cache.data;
   const data = await loadCachedTempoProfitability();
-  cache = { at: Date.now(), data };
+  cache = { at: Date.now(), version: DATA_VERSION, data };
   return data;
 }
 
 /** Faster client pages: only pull Tempo labor/worklogs for matching retainer rows. */
 export async function getTempoProfitabilityForSlug(slug: string): Promise<ProfitabilityData> {
-  if (cache && Date.now() - cache.at < 5 * 60 * 1000) {
+  if (cache && cache.version === DATA_VERSION && Date.now() - cache.at < 5 * 60 * 1000) {
     const filtered = filterProfitData(cache.data, slug);
     if (filtered.clients.length > 0) return filtered;
   }
@@ -104,12 +105,13 @@ async function loadTempoProfitability(opts?: { slug?: string }): Promise<Profita
     quarterStart: quarterStartDate(asOf),
     monthStart: `${asOf.slice(0, 7)}-01`,
   };
-  const [projects, teams, allocations, costRates] = await Promise.all([
+  const [projects, teams, allocations, costSheet] = await Promise.all([
     tempoOffset<TempoProject>("/4/projects"),
     tempoOffset<TempoTeam>("/4/teams"),
     loadAllocations(),
-    loadCostRates(),
+    loadCostSheet(),
   ]);
+  const costRates = costSheet.rates;
   const employeeTeam = teams.find((team) => team.status === "ACTIVE" && /employee/i.test(team.name) && /dashboard/i.test(team.name))
     || teams.find((team) => team.status === "ACTIVE" && /employee/i.test(team.name));
   if (!employeeTeam) throw new Error("Tempo has no active Employees team.");
@@ -234,6 +236,8 @@ async function loadTempoProfitability(opts?: { slug?: string }): Promise<Profita
       allocatedCount: clients.filter((client) => client.allocatedHours != null).length,
     },
     costRates,
+    monthlyOverhead: costSheet.monthlyOverhead,
+    payingAllocatedHours: payingAllocatedHours(allocations),
   };
 }
 
@@ -273,21 +277,33 @@ async function loadAllocations(): Promise<Map<string, Allocation>> {
   return allocations;
 }
 
-async function loadCostRates(): Promise<CostRate[]> {
+async function loadCostSheet(): Promise<{ rates: CostRate[]; monthlyOverhead: number | null }> {
   try {
-    const response = await fetch(COST_SHEET_CSV, { next: { revalidate: 300 }, redirect: "follow" });
-    if (!response.ok) return [];
+    const response = await fetch(COST_SHEET_CSV, { cache: "no-store", redirect: "follow" });
+    if (!response.ok) return { rates: [], monthlyOverhead: null };
     const rates: CostRate[] = [];
+    let monthlyOverhead: number | null = null;
     for (const row of parseCsv(await response.text())) {
       const name = (row[0] || "").trim();
       const hourly = parseMoney(row[1] || "");
-      if (!name || hourly == null) continue;
-      rates.push({ name, hourly });
+      if (name && hourly != null) rates.push({ name, hourly });
+      const overhead = parseMoney(row[4] || "");
+      if (monthlyOverhead == null && overhead != null && /overhead/i.test(row[3] || "")) monthlyOverhead = overhead;
     }
-    return rates;
+    return { rates, monthlyOverhead };
   } catch {
-    return [];
+    return { rates: [], monthlyOverhead: null };
   }
+}
+
+function payingAllocatedHours(allocations: Map<string, Allocation>) {
+  let total = 0;
+  for (const allocation of allocations.values()) {
+    if (allocation.hours != null && allocation.hours > 0 && allocation.billableRate != null && allocation.billableRate > 0) {
+      total += allocation.hours;
+    }
+  }
+  return total;
 }
 
 function parseMoney(value: string) {

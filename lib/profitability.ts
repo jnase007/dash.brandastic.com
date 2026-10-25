@@ -63,6 +63,10 @@ export type ProfitabilityData = {
   bounds: DateBounds;
   coverage: TempoCoverage;
   costRates: CostRate[];
+  /** Column E on the cost sheet. Null when the cell is blank. */
+  monthlyOverhead: number | null;
+  /** Allocated hours of clients that have a retainer rate. Overhead is split across this total. */
+  payingAllocatedHours: number;
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -379,10 +383,11 @@ function normalizeName(value: string) {
 
 export function hourlyCostFor(member: string, rates: CostRate[]): number | null {
   const key = normalizeName(member);
-  if (!key || key === "unassigned") return null;
-  const target = RATE_ALIASES[key] || key;
+  if (!key) return null;
+  const target = key === "unassigned" ? "unassigned" : RATE_ALIASES[key] || key;
   const exact = rates.find((rate) => normalizeName(rate.name) === target);
   if (exact) return exact.hourly;
+  if (key === "unassigned") return null;
   const first = key.split(" ")[0];
   const hits = rates.filter((rate) => {
     const name = normalizeName(rate.name);
@@ -402,6 +407,9 @@ export function formatMoney(value: number) {
 export type DirectProfit = {
   revenue: number | null;
   labor: number;
+  overhead: number | null;
+  overheadHours: number | null;
+  overheadBaseHours: number | null;
   profit: number | null;
   margin: number | null;
   uncostedHours: number;
@@ -479,17 +487,28 @@ export function contractBurn(client: ProfitClient, entries: TimeEntry[], rates: 
   };
 }
 
+function overheadMonths(client: ProfitClient, range: ProfitRange, bounds: DateBounds) {
+  if (range === "month") return 1;
+  if (range === "quarter") return ((Number(bounds.asOf.slice(5, 7)) - 1) % 3) + 1;
+  return contractMonths(client);
+}
+
 export function directProfit(
   clients: ProfitClient[],
   entries: TimeEntry[],
   rates: CostRate[],
   range: ProfitRange,
-  bounds: DateBounds
+  bounds: DateBounds,
+  monthlyOverhead: number | null,
+  payingAllocatedHours: number
 ): DirectProfit {
   let revenue = 0;
   let hasRevenue = false;
   let labor = 0;
   let uncostedHours = 0;
+  let overhead = 0;
+  let hasOverhead = false;
+  let overheadHours = 0;
   const slugs = new Set(clients.map((client) => client.slug));
   for (const client of clients) {
     const hours = hoursBudget(client, range, bounds);
@@ -497,6 +516,21 @@ export function directProfit(
       revenue += hours * client.billableRate;
       hasRevenue = true;
     }
+    const months = overheadMonths(client, range, bounds);
+    if (
+      monthlyOverhead == null ||
+      payingAllocatedHours <= 0 ||
+      client.allocatedHours == null ||
+      client.allocatedHours <= 0 ||
+      client.billableRate == null ||
+      client.billableRate <= 0 ||
+      months == null
+    ) {
+      continue;
+    }
+    overhead += monthlyOverhead * (client.allocatedHours / payingAllocatedHours) * months;
+    overheadHours += client.allocatedHours;
+    hasOverhead = true;
   }
   for (const entry of entries) {
     if (!slugs.has(entry.clientSlug)) continue;
@@ -505,7 +539,16 @@ export function directProfit(
     if (hourly == null) uncostedHours += logged;
     else labor += logged * hourly;
   }
-  const profit = hasRevenue ? revenue - labor : null;
+  const profit = hasRevenue ? revenue - labor - (hasOverhead ? overhead : 0) : null;
   const margin = profit != null && revenue > 0 ? (profit / revenue) * 100 : null;
-  return { revenue: hasRevenue ? revenue : null, labor, profit, margin, uncostedHours };
+  return {
+    revenue: hasRevenue ? revenue : null,
+    labor,
+    overhead: hasOverhead ? overhead : null,
+    overheadHours: hasOverhead ? overheadHours : null,
+    overheadBaseHours: hasOverhead ? payingAllocatedHours : null,
+    profit,
+    margin,
+    uncostedHours,
+  };
 }
