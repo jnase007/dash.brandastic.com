@@ -9,18 +9,26 @@ import {
   chartAllocationMinutes,
   chartBuckets,
   clientBySlug,
+  contractBurn,
   contractTrend,
   donutSlices,
   entriesFor,
-  formatDuration,
   formatEntryDate,
   formatHours,
+  formatHoursMinutes,
+  formatMoney,
   formatPct,
+  hourlyCostFor,
   hoursBudget,
   reportWindow,
   contractTermLabel,
+  directProfit,
+  type CostRate,
+  type DirectProfit,
+  type ProfitClient,
   type ProfitabilityData,
   type ProfitRange,
+  type TimeEntry,
 } from "@/lib/profitability";
 
 function profitabilityHref(range: ProfitRange, slug?: string) {
@@ -41,6 +49,7 @@ export function ProfitabilityDashboard({
 }) {
   const router = useRouter();
   const { clients, entries, bounds } = data;
+  const clientOptions = data.directory?.length ? data.directory : clients;
   const [range, setRange] = useState<ProfitRange>(initialRange);
   const [activeBar, setActiveBar] = useState<string | null>(null);
   const [activeSlice, setActiveSlice] = useState<string | null>(null);
@@ -119,6 +128,21 @@ export function ProfitabilityDashboard({
   const totalHasBudget = totalBudget > 0;
   const totalPct = totalHasBudget ? (totalLogged / totalBudget) * 100 : 0;
   const totalHealth = burnHealth(totalPct);
+  const portfolioProfit = useMemo(
+    () =>
+      directProfit(
+        clients.filter((client) => client.slug !== "brandastic"),
+        entriesFor(entries, clients, range, "all", bounds).filter((entry) => entry.clientSlug !== "brandastic"),
+        data.costRates || [],
+        range,
+        bounds
+      ),
+    [clients, entries, range, bounds, data.costRates]
+  );
+  const clientProfit = useMemo(
+    () => (selected ? directProfit([selected], viewEntries, data.costRates || [], range, bounds) : null),
+    [selected, viewEntries, data.costRates, range, bounds]
+  );
 
   return (
     <div className="pr-page">
@@ -139,7 +163,7 @@ export function ProfitabilityDashboard({
                   Select a client
                 </option>
               ) : null}
-              {clients.map((client) => (
+              {clientOptions.map((client) => (
                 <option key={client.slug} value={client.slug}>
                   {client.name}
                 </option>
@@ -161,6 +185,7 @@ export function ProfitabilityDashboard({
           </div>
         </div>
       </header>
+      {view === "overview" ? <MoneyKpis profit={portfolioProfit} /> : null}
       {view === "overview" ? (
       <section className="pr-cards-wrap">
       <article className="pr-card pr-card-total" aria-label="All Clients (minus Brandastic)">
@@ -274,13 +299,244 @@ export function ProfitabilityDashboard({
             <div className="pr-panel-head">
               <h3>Time by team member</h3>
             </div>
-            <DonutChart slices={slices} active={activeSlice} onActive={setActiveSlice} />
+            <DonutChart
+              slices={slices}
+              rates={data.costRates || []}
+              active={activeSlice}
+              onActive={setActiveSlice}
+            />
           </article>
         </div>
+        {clientProfit ? <MoneyKpis profit={clientProfit} /> : null}
+        {range === "year" ? (
+          <ContractBurnChart client={selected} entries={viewEntries} rates={data.costRates || []} />
+        ) : null}
       </section>
       ) : null}
     </div>
   );
+}
+
+function MoneyKpis({ profit }: { profit: DirectProfit }) {
+  return (
+    <section className="pr-profit" aria-label="Direct labor profit">
+      <p>Revenue minus direct labor. This is not net profit after overhead.</p>
+      <div className="pr-kpis pr-profit-kpis">
+        <article className="pr-kpi">
+          <span>Revenue</span>
+          <strong>{profit.revenue == null ? "—" : formatMoney(profit.revenue)}</strong>
+          <small>What the client pays for this period</small>
+        </article>
+        <article className="pr-kpi">
+          <span>Labor cost</span>
+          <strong>{formatMoney(profit.labor)}</strong>
+          <small>
+            {profit.uncostedHours > 0
+              ? `${formatHours(profit.uncostedHours)}h missing a cost rate`
+              : "Hours logged × hourly cost"}
+          </small>
+        </article>
+        <article className="pr-kpi">
+          <span>Profit</span>
+          <strong className={profit.profit != null && profit.profit < 0 ? "over" : ""}>
+            {profit.profit == null ? "—" : formatMoney(profit.profit)}
+          </strong>
+          <small className={profit.margin != null && profit.margin < 0 ? "over" : "under"}>
+            {profit.margin == null ? "Needs a retainer rate" : `${formatPct(profit.margin)}% margin`}
+          </small>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function ContractBurnChart({
+  client,
+  entries,
+  rates,
+}: {
+  client: ProfitClient;
+  entries: TimeEntry[];
+  rates: CostRate[];
+}) {
+  const burn = useMemo(() => contractBurn(client, entries, rates), [client, entries, rates]);
+  const [hover, setHover] = useState<{ date: string; x: number } | null>(null);
+  if (!burn) return null;
+
+  const width = 760;
+  const height = 280;
+  const left = 56;
+  const right = 16;
+  const top = 16;
+  const bottom = 36;
+  const plotW = width - left - right;
+  const plotH = height - top - bottom;
+  const peak = Math.max(burn.retainerTotal ?? 0, burn.laborTotal, 1);
+  const ticks = moneyTicks(peak);
+  const ceiling = ticks[ticks.length - 1] || 1;
+  const startDay = dayNumber(burn.start);
+  const span = Math.max(dayNumber(burn.end) - startDay, 1);
+  const xOf = (date: string) => left + ((dayNumber(date) - startDay) / span) * plotW;
+  const yOf = (amount: number) => top + (1 - amount / ceiling) * plotH;
+  const baseline = yOf(0);
+  const labels = burnLabels(burn.start, burn.end);
+
+  let laborPath = "";
+  if (burn.labor.length) {
+    laborPath = `M ${xOf(burn.labor[0].date)} ${baseline}`;
+    for (const point of burn.labor) laborPath += ` L ${xOf(point.date)} ${yOf(point.amount)}`;
+    laborPath += ` L ${xOf(burn.labor[burn.labor.length - 1].date)} ${baseline} Z`;
+  }
+  let retainerPath = "";
+  if (burn.retainer.length) {
+    retainerPath = `M ${xOf(burn.retainer[0].date)} ${yOf(burn.retainer[0].amount)}`;
+    for (let index = 1; index < burn.retainer.length; index += 1) {
+      retainerPath += ` L ${xOf(burn.retainer[index].date)} ${yOf(burn.retainer[index - 1].amount)}`;
+      retainerPath += ` L ${xOf(burn.retainer[index].date)} ${yOf(burn.retainer[index].amount)}`;
+    }
+  }
+
+  const hoverDate = hover?.date;
+  const hoverRetainer = hoverDate && burn.retainer.length ? amountAt(burn.retainer, hoverDate) : null;
+  const hoverLabor = hoverDate ? amountAt(burn.labor, hoverDate) : null;
+
+  return (
+    <article className="pr-panel pr-burn-panel">
+      <div className="pr-panel-head">
+        <h3>Retainer vs labor</h3>
+      </div>
+      <p className="pr-burn-note">
+        {burn.retainerTotal == null
+          ? "Labor is hours logged × hourly cost. This client needs a retainer rate."
+          : "The orange line steps up by one month of the retainer. The blue area is labor cost."}
+      </p>
+      <div className="pr-burn-chart">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+          aria-label="Retainer versus labor cost across the contract year"
+          onMouseMove={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            const x = ((event.clientX - rect.left) / rect.width) * width;
+            if (x < left || x > left + plotW) {
+              setHover(null);
+              return;
+            }
+            const day = startDay + ((x - left) / plotW) * span;
+            setHover({ date: dayToIso(day), x });
+          }}
+          onMouseLeave={() => setHover(null)}
+        >
+          <defs>
+            <linearGradient id="pr-labor-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#60a5fa" />
+              <stop offset="100%" stopColor="#2563eb" />
+            </linearGradient>
+          </defs>
+          {ticks.map((tick) => (
+            <g key={tick}>
+              <line className="pr-burn-grid" x1={left} x2={left + plotW} y1={yOf(tick)} y2={yOf(tick)} />
+              <text className="pr-burn-axis" x={left - 8} y={yOf(tick) + 4} textAnchor="end">
+                {formatAxisMoney(tick)}
+              </text>
+            </g>
+          ))}
+          {laborPath ? <path d={laborPath} fill="url(#pr-labor-fill)" /> : null}
+          {retainerPath ? <path className="pr-burn-retainer" d={retainerPath} /> : null}
+          {labels.map((date, index) => (
+            <text
+              key={date}
+              className="pr-burn-axis"
+              x={xOf(date)}
+              y={height - 10}
+              textAnchor={index === 0 ? "start" : index === labels.length - 1 ? "end" : "middle"}
+            >
+              {burnTickLabel(date)}
+            </text>
+          ))}
+          {hover ? <line className="pr-burn-hover" x1={hover.x} x2={hover.x} y1={top} y2={baseline} /> : null}
+        </svg>
+        {hover && hoverDate ? (
+          <div className="pr-burn-tip" style={{ left: `${(Math.min(Math.max(hover.x, 90), width - 90) / width) * 100}%` }}>
+            <strong>{formatEntryDate(hoverDate)}</strong>
+            {hoverRetainer != null ? <span>Retainer {formatMoney(hoverRetainer)}</span> : null}
+            <span>Labor {formatMoney(hoverLabor || 0)}</span>
+          </div>
+        ) : null}
+      </div>
+      <ul className="pr-burn-legend">
+        <li>
+          <i className="retainer" />
+          Retainer
+          <b>{burn.retainerTotal == null ? "—" : formatMoney(burn.retainerTotal)}</b>
+        </li>
+        <li>
+          <i className="labor" />
+          Labor
+          <b>{formatMoney(burn.laborTotal)}</b>
+        </li>
+      </ul>
+    </article>
+  );
+}
+
+function amountAt(points: { date: string; amount: number }[], date: string) {
+  let amount = 0;
+  for (const point of points) {
+    if (point.date > date) break;
+    amount = point.amount;
+  }
+  return amount;
+}
+
+function dayNumber(iso: string) {
+  const [year, month, day] = iso.split("-").map(Number);
+  return Date.UTC(year, month - 1, day) / 86400000;
+}
+
+function dayToIso(day: number) {
+  return new Date(Math.round(day) * 86400000).toISOString().slice(0, 10);
+}
+
+function moneyTicks(value: number) {
+  const exp = Math.pow(10, Math.floor(Math.log10(Math.max(value, 1))));
+  const fraction = value / exp;
+  const stepFraction = fraction <= 1 ? 0.2 : fraction <= 2 ? 0.5 : fraction <= 5 ? 1 : 2;
+  const step = stepFraction * exp;
+  const max = Math.ceil((value * 1.02) / step) * step;
+  const ticks: number[] = [];
+  for (let tick = 0; tick <= max + step / 100; tick += step) ticks.push(Math.round(tick * 100) / 100);
+  return ticks;
+}
+
+function burnLabels(start: string, end: string) {
+  const startDay = dayNumber(start);
+  const span = Math.max(dayNumber(end) - startDay, 1);
+  const chosen = new Map<string, string>();
+  for (let index = 0; index < 5; index += 1) {
+    const iso = dayToIso(startDay + (span * index) / 4);
+    const key = iso.slice(0, 7);
+    if (chosen.has(key)) continue;
+    chosen.set(key, index === 0 ? start : index === 4 ? end : `${key}-01`);
+  }
+  return [...chosen.values()];
+}
+
+const BURN_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function burnTickLabel(iso: string) {
+  const [year, month] = iso.split("-").map(Number);
+  return `${BURN_MONTHS[month - 1]} '${String(year).slice(2)}`;
+}
+
+function formatAxisMoney(value: number) {
+  if (value === 0) return "$0";
+  const abs = Math.abs(value);
+  if (abs >= 1000) {
+    const thousands = Math.round((value / 1000) * 10) / 10;
+    return `$${Number.isInteger(thousands) ? thousands : thousands.toFixed(1)}k`;
+  }
+  return formatMoney(value);
 }
 
 function HoursSummary({
@@ -392,10 +648,12 @@ function BarChart({
 
 function DonutChart({
   slices,
+  rates,
   active,
   onActive,
 }: {
   slices: { label: string; minutes: number; color: string }[];
+  rates: { name: string; hourly: number }[];
   active: string | null;
   onActive: (label: string | null) => void;
 }) {
@@ -405,6 +663,10 @@ function DonutChart({
   const circumference = 2 * Math.PI * radius;
   let cursor = 0;
   const activeSlice = slices.find((slice) => slice.label === active);
+  const sliceCost = (minutes: number, label: string) => {
+    const hourly = hourlyCostFor(label, rates);
+    return hourly == null ? null : (minutes / 60) * hourly;
+  };
 
   return (
     <div className="pr-donut-wrap">
@@ -446,7 +708,10 @@ function DonutChart({
         {activeSlice ? (
           <div className="pr-tip floating" role="tooltip">
             <strong>{activeSlice.label}</strong>
-            {((activeSlice.minutes / total) * 100).toFixed(1)}% · {formatDuration(activeSlice.minutes)}
+            {((activeSlice.minutes / total) * 100).toFixed(1)}% · {formatHoursMinutes(activeSlice.minutes)}
+            {sliceCost(activeSlice.minutes, activeSlice.label) == null
+              ? ""
+              : ` · ${formatMoney(sliceCost(activeSlice.minutes, activeSlice.label) || 0)}`}
           </div>
         ) : null}
       </div>
@@ -466,8 +731,9 @@ function DonutChart({
                 <i style={{ background: slice.color }} />
                 <span>{slice.label}</span>
                 <em>
-                  {pct.toFixed(1)}% · {formatDuration(slice.minutes)}
+                  {pct.toFixed(1)}% · {formatHoursMinutes(slice.minutes)}
                 </em>
+                <b>{sliceCost(slice.minutes, slice.label) == null ? "—" : formatMoney(sliceCost(slice.minutes, slice.label) || 0)}</b>
               </button>
             </li>
           );

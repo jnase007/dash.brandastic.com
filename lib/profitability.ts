@@ -18,6 +18,7 @@ export type ProfitClient = {
   name: string;
   budgetAmount: number;
   allocatedHours: number | null;
+  billableRate: number | null;
   renewalKind: RenewalKind;
   renewalDate: string | null;
   renewalMonth: number;
@@ -52,11 +53,16 @@ export type TempoCoverage = {
   allocatedCount: number;
 };
 
+export type CostRate = { name: string; hourly: number };
+
 export type ProfitabilityData = {
   clients: ProfitClient[];
+  /** Every Brand Care client, so a client page can switch without loading every worklog. */
+  directory: { slug: string; name: string }[];
   entries: TimeEntry[];
   bounds: DateBounds;
   coverage: TempoCoverage;
+  costRates: CostRate[];
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -223,6 +229,13 @@ function shiftMonths(iso: string, monthDelta: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function addMonthsClamped(iso: string, months: number) {
+  const [year, month, day] = iso.split("-").map(Number);
+  const targetMonth = month - 1 + months;
+  const daysInMonth = new Date(Date.UTC(year, targetMonth + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, targetMonth, Math.min(day, daysInMonth))).toISOString().slice(0, 10);
+}
+
 export type ChartBucket = {
   key: string;
   label: string;
@@ -298,6 +311,13 @@ export function formatDuration(minutes: number) {
   return `${hours}:${pad(mins)}:${pad(seconds)}`;
 }
 
+export function formatHoursMinutes(minutes: number) {
+  const totalMinutes = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  return `${hours}:${pad(mins)}`;
+}
+
 export function formatHours(hours: number) {
   return String(Math.round(hours));
 }
@@ -333,4 +353,159 @@ export function monthLabel(month: number) {
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
+}
+
+const RATE_ALIASES: Record<string, string> = {
+  aimee: "aimee mcafee",
+  carlos: "carlos cerda",
+  chloe: "chloe uyehara",
+  cj: "cj williams",
+  clara: "clara",
+  cory: "cory",
+  jonathan: "jonathan",
+  justin: "justin nassie",
+  maxwell: "maxwell gilbert",
+  megan: "megan hahn",
+  quentin: "quentin dietz",
+  samantha: "samantha o leary",
+  "sandy o": "sandy ortiz",
+  stacy: "stacy williams",
+  melissa: "melissa",
+};
+
+function normalizeName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+export function hourlyCostFor(member: string, rates: CostRate[]): number | null {
+  const key = normalizeName(member);
+  if (!key || key === "unassigned") return null;
+  const target = RATE_ALIASES[key] || key;
+  const exact = rates.find((rate) => normalizeName(rate.name) === target);
+  if (exact) return exact.hourly;
+  const first = key.split(" ")[0];
+  const hits = rates.filter((rate) => {
+    const name = normalizeName(rate.name);
+    return name === first || name.startsWith(`${first} `);
+  });
+  return hits.length === 1 ? hits[0].hourly : null;
+}
+
+export function formatMoney(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+export type DirectProfit = {
+  revenue: number | null;
+  labor: number;
+  profit: number | null;
+  margin: number | null;
+  uncostedHours: number;
+};
+
+export type BurnPoint = { date: string; amount: number };
+
+export type ContractBurn = {
+  start: string;
+  end: string;
+  /** Step points. The amount applies on that date and holds until the next step. */
+  retainer: BurnPoint[];
+  labor: BurnPoint[];
+  retainerTotal: number | null;
+  laborTotal: number;
+};
+
+/** Cumulative retainer versus labor for one client's contract window. */
+export function contractBurn(client: ProfitClient, entries: TimeEntry[], rates: CostRate[]): ContractBurn | null {
+  if (!client.contractStart || !client.contractEnd) return null;
+  const start = client.contractStart;
+  const end = client.contractEnd;
+  const monthly =
+    client.allocatedHours != null && client.allocatedHours > 0 && client.billableRate != null && client.billableRate > 0
+      ? client.allocatedHours * client.billableRate
+      : null;
+
+  const retainer: BurnPoint[] = [];
+  if (monthly != null) {
+    if (client.renewalKind === "mtm") {
+      for (let index = 0; index < 12; index += 1) {
+        const date = addMonthsClamped(start, index);
+        if (date > end) break;
+        retainer.push({ date, amount: monthly * (index + 1) });
+      }
+      const last = retainer[retainer.length - 1];
+      if (!last || last.date < end) retainer.push({ date: end, amount: monthly * 12 });
+    } else {
+      const elapsed = elapsedContractMonths(start, end);
+      retainer.push({ date: start, amount: 0 });
+      for (let index = 1; index < 36; index += 1) {
+        const date = addMonthsClamped(start, index);
+        if (date >= end) break;
+        retainer.push({ date, amount: monthly * index });
+      }
+      const last = retainer[retainer.length - 1];
+      if (last?.date === end) last.amount = monthly * elapsed;
+      else retainer.push({ date: end, amount: monthly * elapsed });
+    }
+  }
+
+  const byDate = new Map<string, number>();
+  for (const entry of entries) {
+    if (entry.clientSlug !== client.slug || entry.date < start || entry.date > end) continue;
+    const hourly = hourlyCostFor(entry.member, rates);
+    if (hourly == null) continue;
+    byDate.set(entry.date, (byDate.get(entry.date) || 0) + (entry.minutes / 60) * hourly);
+  }
+  const labor: BurnPoint[] = [{ date: start, amount: 0 }];
+  let running = 0;
+  for (const date of [...byDate.keys()].sort()) {
+    running += byDate.get(date) || 0;
+    if (date === start) labor[0].amount = running;
+    else labor.push({ date, amount: running });
+  }
+  if (labor[labor.length - 1].date !== end) labor.push({ date: end, amount: running });
+
+  return {
+    start,
+    end,
+    retainer,
+    labor,
+    retainerTotal: retainer.length ? retainer[retainer.length - 1].amount : null,
+    laborTotal: running,
+  };
+}
+
+export function directProfit(
+  clients: ProfitClient[],
+  entries: TimeEntry[],
+  rates: CostRate[],
+  range: ProfitRange,
+  bounds: DateBounds
+): DirectProfit {
+  let revenue = 0;
+  let hasRevenue = false;
+  let labor = 0;
+  let uncostedHours = 0;
+  const slugs = new Set(clients.map((client) => client.slug));
+  for (const client of clients) {
+    const hours = hoursBudget(client, range, bounds);
+    if (client.billableRate != null && client.billableRate > 0 && hours != null) {
+      revenue += hours * client.billableRate;
+      hasRevenue = true;
+    }
+  }
+  for (const entry of entries) {
+    if (!slugs.has(entry.clientSlug)) continue;
+    const hourly = hourlyCostFor(entry.member, rates);
+    const logged = entry.minutes / 60;
+    if (hourly == null) uncostedHours += logged;
+    else labor += logged * hourly;
+  }
+  const profit = hasRevenue ? revenue - labor : null;
+  const margin = profit != null && revenue > 0 ? (profit / revenue) * 100 : null;
+  return { revenue: hasRevenue ? revenue : null, labor, profit, margin, uncostedHours };
 }

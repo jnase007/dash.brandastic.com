@@ -1,10 +1,12 @@
 import { unstable_cache } from "next/cache";
-import type { ProfitabilityData, ProfitClient, RenewalKind, TimeEntry } from "./profitability";
+import type { CostRate, ProfitabilityData, ProfitClient, RenewalKind, TimeEntry } from "./profitability";
 import { contractYearWindow, formatEntryDate, quarterStartDate } from "./profitability";
 
 const TEMPO_BASE = "https://api.tempo.io";
 const RETAINER_SHEET_CSV =
   "https://docs.google.com/spreadsheets/d/1boM2Noiiwyrxby2li49DoHxY_Jbkim0FsTKnjRX1GUI/export?format=csv";
+const COST_SHEET_CSV =
+  "https://docs.google.com/spreadsheets/d/15tea60E_4d04GauxU7Sb4RYYnCIAifj0GWNAx3hmEQM/export?format=csv";
 
 type TempoProject = {
   id: string;
@@ -41,13 +43,13 @@ type TempoTeamMember = {
 };
 
 type SheetRenewal = { kind: RenewalKind; date?: string };
-type Allocation = { name: string; hours: number | null; renewal: SheetRenewal };
+type Allocation = { name: string; hours: number | null; renewal: SheetRenewal; billableRate: number | null };
 
 let cache: { at: number; data: ProfitabilityData } | null = null;
 
 const loadCachedTempoProfitability = unstable_cache(
   async () => loadTempoProfitability(),
-  ["tempo-profitability-v2"],
+  ["tempo-profitability-v3"],
   { revalidate: 300, tags: ["tempo-profitability"] }
 );
 
@@ -74,10 +76,14 @@ export async function getTempoProfitabilityForSlug(slug: string): Promise<Profit
 }
 
 function filterProfitData(data: ProfitabilityData, slug: string): ProfitabilityData {
+  const directory = data.directory?.length
+    ? data.directory
+    : data.clients.map((client) => ({ slug: client.slug, name: client.name }));
   const clients = data.clients.filter((client) => client.slug === slug);
   const entries = data.entries.filter((entry) => entry.clientSlug === slug);
   return {
     ...data,
+    directory,
     clients,
     entries,
     coverage: {
@@ -98,10 +104,11 @@ async function loadTempoProfitability(opts?: { slug?: string }): Promise<Profita
     quarterStart: quarterStartDate(asOf),
     monthStart: `${asOf.slice(0, 7)}-01`,
   };
-  const [projects, teams, allocations] = await Promise.all([
+  const [projects, teams, allocations, costRates] = await Promise.all([
     tempoOffset<TempoProject>("/4/projects"),
     tempoOffset<TempoTeam>("/4/teams"),
     loadAllocations(),
+    loadCostRates(),
   ]);
   const employeeTeam = teams.find((team) => team.status === "ACTIVE" && /employee/i.test(team.name) && /dashboard/i.test(team.name))
     || teams.find((team) => team.status === "ACTIVE" && /employee/i.test(team.name));
@@ -188,6 +195,7 @@ async function loadTempoProfitability(opts?: { slug?: string }): Promise<Profita
       renewalLabel: renewalLabel(renewal.kind, renewalDate),
       contractStart: row.window?.start || "",
       contractEnd: row.window?.end || "",
+      billableRate: row.allocation?.billableRate ?? null,
     });
 
     for (const worklog of row.worklogs) {
@@ -215,6 +223,7 @@ async function loadTempoProfitability(opts?: { slug?: string }): Promise<Profita
   clients.sort((a, b) => a.name.localeCompare(b.name));
   return {
     clients,
+    directory: clientDirectory(allocations),
     entries,
     bounds,
     coverage: {
@@ -224,6 +233,7 @@ async function loadTempoProfitability(opts?: { slug?: string }): Promise<Profita
       costedCount,
       allocatedCount: clients.filter((client) => client.allocatedHours != null).length,
     },
+    costRates,
   };
 }
 
@@ -240,11 +250,12 @@ async function loadAllocations(): Promise<Map<string, Allocation>> {
       const projectId = (row[11] || "").trim();
       const parsedHours = Number.parseFloat(row[12] || "");
       const hours = Number.isFinite(parsedHours) && parsedHours > 0 ? parsedHours : null;
+      const rate = parseMoney(row[13] || "");
       const renewal = parseRenewal(row[2] || "");
       if (!projectId) continue;
       const existing = allocations.get(projectId);
       if (!existing) {
-        allocations.set(projectId, { name: name || projectId, hours, renewal });
+        allocations.set(projectId, { name: name || projectId, hours, renewal, billableRate: rate });
         continue;
       }
       const names = [existing.name, name].filter(Boolean);
@@ -253,12 +264,35 @@ async function loadAllocations(): Promise<Map<string, Allocation>> {
         name: [...new Set(names)].join(" / "),
         hours: combined > 0 ? combined : null,
         renewal: existing.renewal.kind === "unknown" ? renewal : existing.renewal,
+        billableRate: existing.billableRate ?? rate,
       });
     }
   } catch {
     return allocations;
   }
   return allocations;
+}
+
+async function loadCostRates(): Promise<CostRate[]> {
+  try {
+    const response = await fetch(COST_SHEET_CSV, { next: { revalidate: 300 }, redirect: "follow" });
+    if (!response.ok) return [];
+    const rates: CostRate[] = [];
+    for (const row of parseCsv(await response.text())) {
+      const name = (row[0] || "").trim();
+      const hourly = parseMoney(row[1] || "");
+      if (!name || hourly == null) continue;
+      rates.push({ name, hourly });
+    }
+    return rates;
+  } catch {
+    return [];
+  }
+}
+
+function parseMoney(value: string) {
+  const amount = Number.parseFloat(value.replace(/[$,]/g, ""));
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
 }
 
 function parseCsv(text: string) {
@@ -314,6 +348,20 @@ function renewalLabel(kind: RenewalKind, renewalDate: string | null) {
 
 function shortName(name: string) {
   return name.replace(/\s*\(.*$/, "").replace(/\)+$/g, "").trim();
+}
+
+function clientDirectory(allocations: Map<string, Allocation>) {
+  const usedSlugs = new Set<string>();
+  const directory: { slug: string; name: string }[] = [];
+  for (const [jiraId, allocation] of allocations) {
+    const name = allocation.name || jiraId;
+    let slug = slugify(name) || jiraId;
+    if (usedSlugs.has(slug)) slug = `${slug}-${jiraId}`;
+    usedSlugs.add(slug);
+    directory.push({ slug, name });
+  }
+  directory.sort((a, b) => a.name.localeCompare(b.name));
+  return directory;
 }
 
 function slugify(name: string) {
