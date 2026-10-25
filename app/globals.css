@@ -2761,7 +2761,8 @@ code {
 }
 
 .pr-card-total {
-  width: 100%;
+  width: calc(50% - 6px);
+  max-width: calc(50% - 6px);
   cursor: default;
 }
 
@@ -3019,6 +3020,10 @@ code {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+}
+
+.pr-charts.split {
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
 }
 
 .pr-panel {
@@ -3417,6 +3422,10 @@ code {
   .pr-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .pr-card-total {
+    width: 100%;
+    max-width: 100%;
+  }
 }
 
 @media (max-width: 1100px) {
@@ -3429,7 +3438,8 @@ code {
     justify-content: flex-start;
     flex: 1 1 auto;
   }
-  .pr-charts {
+  .pr-charts,
+  .pr-charts.split {
     grid-template-columns: 1fr;
   }
 }

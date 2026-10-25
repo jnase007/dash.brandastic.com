@@ -33,7 +33,12 @@ type TempoWorklog = {
   author?: { accountId?: string };
 };
 
-type TempoRole = { id: number | string; name: string };
+type TempoTeam = { id: number; name: string; status?: string };
+
+type TempoTeamMember = {
+  member?: { accountId?: string };
+  memberships?: { active?: { role?: { name?: string } } };
+};
 
 type SheetRenewal = { kind: RenewalKind; date?: string };
 type Allocation = { name: string; hours: number | null; renewal: SheetRenewal };
@@ -93,12 +98,22 @@ async function loadTempoProfitability(opts?: { slug?: string }): Promise<Profita
     quarterStart: quarterStartDate(asOf),
     monthStart: `${asOf.slice(0, 7)}-01`,
   };
-  const [projects, roles, allocations] = await Promise.all([
+  const [projects, teams, allocations] = await Promise.all([
     tempoOffset<TempoProject>("/4/projects"),
-    tempoOffset<TempoRole>("/4/roles"),
+    tempoOffset<TempoTeam>("/4/teams"),
     loadAllocations(),
   ]);
-  const roleNames = new Map(roles.map((role) => [String(role.id), role.name]));
+  const employeeTeam = teams.find((team) => team.status === "ACTIVE" && /employee/i.test(team.name) && /dashboard/i.test(team.name))
+    || teams.find((team) => team.status === "ACTIVE" && /employee/i.test(team.name));
+  if (!employeeTeam) throw new Error("Tempo has no active Employees team.");
+  const employeeMembers = await tempoOffset<TempoTeamMember>(`/4/teams/${employeeTeam.id}/members`);
+  const memberNames = new Map(
+    employeeMembers.flatMap((row) => {
+      const accountId = row.member?.accountId || "";
+      const name = row.memberships?.active?.role?.name || "";
+      return accountId && name ? [[accountId, name] as const] : [];
+    })
+  );
   const projectByJira = new Map<string, TempoProject>();
   for (const project of projects) {
     const jiraId = project.scope?.source?.reference;
@@ -140,16 +155,9 @@ async function loadTempoProfitability(opts?: { slug?: string }): Promise<Profita
     return { jiraId, project, allocation, window, labor, worklogs };
   });
 
-  const roleByAccount = new Map<string, { date: string; roleId: string }>();
   const costByWorklog = new Map<number, number>();
   for (const row of loaded) {
     for (const labor of row.labor) {
-      const accountId = labor.user?.userLink?.linked?.originId;
-      const roleId = labor.userRole?.self?.split("/").pop() || "";
-      if (accountId && roleId && labor.date) {
-        const previous = roleByAccount.get(accountId);
-        if (!previous || labor.date > previous.date) roleByAccount.set(accountId, { date: labor.date, roleId });
-      }
       if (labor.worklogId) {
         costByWorklog.set(labor.worklogId, (costByWorklog.get(labor.worklogId) || 0) + (labor.cost?.value || 0));
       }
@@ -189,13 +197,12 @@ async function loadTempoProfitability(opts?: { slug?: string }): Promise<Profita
       const cost = costByWorklog.get(worklog.tempoWorklogId) || 0;
       if (cost) costedCount += 1;
       const accountId = worklog.author?.accountId || "";
-      const roleId = roleByAccount.get(accountId)?.roleId || "";
       const issueId = worklog.issue?.id ? String(worklog.issue.id) : "";
       entries.push({
         id: `${slug}-${worklog.tempoWorklogId}`,
         clientSlug: slug,
         date: worklog.startDate,
-        member: roleNames.get(roleId) || "Unassigned",
+        member: memberNames.get(accountId) || "Unassigned",
         taskId: issueId || "—",
         task: issueId ? "Jira issue" : "Untagged time",
         description: description || "No description in Tempo",

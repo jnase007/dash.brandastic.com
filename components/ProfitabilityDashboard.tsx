@@ -10,7 +10,9 @@ import {
   chartBuckets,
   clientBySlug,
   contractTrend,
+  donutSlices,
   entriesFor,
+  formatDuration,
   formatEntryDate,
   formatHours,
   formatPct,
@@ -41,6 +43,7 @@ export function ProfitabilityDashboard({
   const { clients, entries, bounds } = data;
   const [range, setRange] = useState<ProfitRange>(initialRange);
   const [activeBar, setActiveBar] = useState<string | null>(null);
+  const [activeSlice, setActiveSlice] = useState<string | null>(null);
 
   useEffect(() => {
     setRange(initialRange);
@@ -48,6 +51,7 @@ export function ProfitabilityDashboard({
 
   useEffect(() => {
     setActiveBar(null);
+    setActiveSlice(null);
   }, [slug, range]);
 
   const selected = view === "client" ? clientBySlug(clients, slug) : undefined;
@@ -75,6 +79,10 @@ export function ProfitabilityDashboard({
     });
   }
   const buckets = useMemo(() => chartBuckets(range, viewEntries, bounds), [range, viewEntries, bounds]);
+  const slices = useMemo(
+    () => donutSlices(viewEntries, clients, selected?.slug || ""),
+    [viewEntries, clients, selected]
+  );
   const cards = useMemo(
     () =>
         clients.map((client) => {
@@ -249,7 +257,7 @@ export function ProfitabilityDashboard({
           </article>
         </div>
 
-        <div className="pr-charts">
+        <div className="pr-charts split">
           <article className="pr-panel">
             <div className="pr-panel-head">
               <h3>Tracked time</h3>
@@ -261,6 +269,12 @@ export function ProfitabilityDashboard({
               active={activeBar}
               onActive={setActiveBar}
             />
+          </article>
+          <article className="pr-panel">
+            <div className="pr-panel-head">
+              <h3>Time by team member</h3>
+            </div>
+            <DonutChart slices={slices} active={activeSlice} onActive={setActiveSlice} />
           </article>
         </div>
       </section>
@@ -372,6 +386,93 @@ function BarChart({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function DonutChart({
+  slices,
+  active,
+  onActive,
+}: {
+  slices: { label: string; minutes: number; color: string }[];
+  active: string | null;
+  onActive: (label: string | null) => void;
+}) {
+  if (!slices.length) return <p className="pr-note">No tracked time in this period.</p>;
+  const total = slices.reduce((sum, slice) => sum + slice.minutes, 0);
+  const radius = 68;
+  const circumference = 2 * Math.PI * radius;
+  let cursor = 0;
+  const activeSlice = slices.find((slice) => slice.label === active);
+
+  return (
+    <div className="pr-donut-wrap">
+      <div className="pr-donut">
+        <svg viewBox="0 0 200 200" role="img" aria-label="Time by team member">
+          <g transform="rotate(-90 100 100)">
+            {slices.map((slice) => {
+              const length = total ? (slice.minutes / total) * circumference : 0;
+              const gap = length > 6 ? 2 : 0;
+              const visible = Math.max(length - gap, 0);
+              const dash = `${visible} ${circumference - visible}`;
+              const offset = -cursor;
+              cursor += length;
+              return (
+                <circle
+                  key={slice.label}
+                  cx="100"
+                  cy="100"
+                  r={radius}
+                  fill="none"
+                  stroke={slice.color}
+                  strokeWidth="26"
+                  strokeDasharray={dash}
+                  strokeDashoffset={offset}
+                  opacity={!active || active === slice.label ? 1 : 0.35}
+                  onMouseEnter={() => onActive(slice.label)}
+                  onMouseLeave={() => onActive(null)}
+                />
+              );
+            })}
+          </g>
+          <text x="100" y="96" textAnchor="middle" className="pr-donut-value">
+            {formatHours(total / 60)}h
+          </text>
+          <text x="100" y="116" textAnchor="middle" className="pr-donut-sub">
+            logged
+          </text>
+        </svg>
+        {activeSlice ? (
+          <div className="pr-tip floating" role="tooltip">
+            <strong>{activeSlice.label}</strong>
+            {((activeSlice.minutes / total) * 100).toFixed(1)}% · {formatDuration(activeSlice.minutes)}
+          </div>
+        ) : null}
+      </div>
+      <ul className="pr-donut-legend">
+        {slices.map((slice) => {
+          const pct = total ? (slice.minutes / total) * 100 : 0;
+          return (
+            <li key={slice.label}>
+              <button
+                type="button"
+                className={active === slice.label ? "active" : ""}
+                onMouseEnter={() => onActive(slice.label)}
+                onMouseLeave={() => onActive(null)}
+                onFocus={() => onActive(slice.label)}
+                onBlur={() => onActive(null)}
+              >
+                <i style={{ background: slice.color }} />
+                <span>{slice.label}</span>
+                <em>
+                  {pct.toFixed(1)}% · {formatDuration(slice.minutes)}
+                </em>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
