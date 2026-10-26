@@ -30,6 +30,7 @@ import {
   type ProfitRange,
   type TimeEntry,
 } from "@/lib/profitability";
+import { memberSlug } from "@/lib/team";
 
 function profitabilityHref(range: ProfitRange, slug?: string) {
   const query = `?range=${range}`;
@@ -317,6 +318,8 @@ export function ProfitabilityDashboard({
               rates={data.costRates || []}
               active={activeSlice}
               onActive={setActiveSlice}
+              clientSlug={selected.slug}
+              range={range}
             />
           </article>
         </div>
@@ -675,12 +678,17 @@ function DonutChart({
   rates,
   active,
   onActive,
+  clientSlug,
+  range,
 }: {
   slices: { label: string; minutes: number; color: string }[];
   rates: { name: string; hourly: number }[];
   active: string | null;
   onActive: (label: string | null) => void;
+  clientSlug: string;
+  range: ProfitRange;
 }) {
+  const router = useRouter();
   if (!slices.length) return <p className="pr-note">No tracked time in this period.</p>;
   const total = slices.reduce((sum, slice) => sum + slice.minutes, 0);
   const radius = 68;
@@ -753,7 +761,16 @@ function DonutChart({
                 onBlur={() => onActive(null)}
               >
                 <i style={{ background: slice.color }} />
-                <span>{slice.label}</span>
+                <span
+                  className="pr-member-link"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    const teamRange = range === "quarter" ? "quarter" : "month";
+                    router.push(`/profitability/team/${memberSlug(slice.label)}?range=${teamRange}&client=${clientSlug}`);
+                  }}
+                >
+                  {slice.label}
+                </span>
                 <em>
                   {pct.toFixed(1)}% · {formatHoursMinutes(slice.minutes)}
                 </em>

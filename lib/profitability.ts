@@ -67,6 +67,10 @@ export type ProfitabilityData = {
   monthlyOverhead: number | null;
   /** Allocated hours of clients that have a retainer rate. Overhead is split across this total. */
   payingAllocatedHours: number;
+  /** Role names on the Employees team. */
+  roster: string[];
+  /** Brand Care slugs that have a client report. Set on the team page, which also lists other Tempo projects. */
+  reportSlugs?: string[];
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

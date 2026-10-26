@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import type { CostRate, ProfitabilityData, ProfitClient, RenewalKind, TimeEntry } from "./profitability";
 import { contractYearWindow, formatEntryDate, quarterStartDate } from "./profitability";
+import { OTHER_TRACKED_SLUG, projectKeySlug } from "./team";
 
 const TEMPO_BASE = "https://api.tempo.io";
 const RETAINER_SHEET_CSV =
@@ -14,7 +15,7 @@ type TempoProject = {
   status: string;
   budget?: { amount?: { value?: number } };
   timeframe?: { self?: string };
-  scope?: { source?: { reference?: string } };
+  scope?: { source?: { reference?: string; title?: string }; tasks?: { self?: string } };
   laborActuals?: { self?: string };
 };
 
@@ -45,12 +46,12 @@ type TempoTeamMember = {
 type SheetRenewal = { kind: RenewalKind; date?: string };
 type Allocation = { name: string; hours: number | null; renewal: SheetRenewal; billableRate: number | null };
 
-const DATA_VERSION = 6;
+const DATA_VERSION = 7;
 let cache: { at: number; version: number; data: ProfitabilityData } | null = null;
 
 const loadCachedTempoProfitability = unstable_cache(
   async () => loadTempoProfitability(),
-  ["tempo-profitability-v6"],
+  ["tempo-profitability-v7"],
   { revalidate: 300, tags: ["tempo-profitability"] }
 );
 
@@ -74,6 +75,127 @@ export async function getTempoProfitabilityForSlug(slug: string): Promise<Profit
     const full = await getTempoProfitability();
     return filterProfitData(full, slug);
   }
+}
+
+const TEAM_VERSION = 1;
+let teamCache: { at: number; version: number; data: ProfitabilityData } | null = null;
+
+const loadCachedTeamPerformance = unstable_cache(
+  async () => loadTeamPerformance(),
+  ["tempo-team-performance-v1"],
+  { revalidate: 300, tags: ["tempo-profitability"] }
+);
+
+/** Team pages: every Tempo worklog in the quarter, not only Brand Care projects. */
+export async function getTeamPerformanceData(): Promise<ProfitabilityData> {
+  if (teamCache && teamCache.version === TEAM_VERSION && Date.now() - teamCache.at < 5 * 60 * 1000) return teamCache.data;
+  const data = await loadCachedTeamPerformance();
+  teamCache = { at: Date.now(), version: TEAM_VERSION, data };
+  return data;
+}
+
+async function loadTeamPerformance(): Promise<ProfitabilityData> {
+  const profit = await getTempoProfitability();
+  const from = profit.bounds.quarterStart;
+  const to = profit.bounds.asOf;
+  const [projects, teams, allocations, worklogs] = await Promise.all([
+    tempoOffset<TempoProject>("/4/projects"),
+    tempoOffset<TempoTeam>("/4/teams"),
+    loadAllocations(),
+    tempoOffset<TempoWorklog>(`/4/worklogs?from=${from}&to=${to}`),
+  ]);
+  const employeeTeam = teams.find((team) => team.status === "ACTIVE" && /employee/i.test(team.name) && /dashboard/i.test(team.name))
+    || teams.find((team) => team.status === "ACTIVE" && /employee/i.test(team.name));
+  if (!employeeTeam) throw new Error("Tempo has no active Employees team.");
+  const employeeMembers = await tempoOffset<TempoTeamMember>(`/4/teams/${employeeTeam.id}/members`);
+  const memberNames = new Map(
+    employeeMembers.flatMap((row) => {
+      const accountId = row.member?.accountId || "";
+      const name = row.memberships?.active?.role?.name || "";
+      return accountId && name ? [[accountId, name] as const] : [];
+    })
+  );
+
+  const clientName = new Map(profit.clients.map((client) => [client.slug, client.name]));
+  const knownIssues = new Map<string, { slug: string; name: string }>();
+  for (const entry of profit.entries) {
+    if (!/^\d+$/.test(entry.taskId) || knownIssues.has(entry.taskId)) continue;
+    knownIssues.set(entry.taskId, { slug: entry.clientSlug, name: clientName.get(entry.clientSlug) || entry.clientSlug });
+  }
+
+  const outsideByJira = new Map<string, TempoProject>();
+  for (const project of projects) {
+    const jiraId = project.scope?.source?.reference;
+    if (!jiraId || allocations.has(jiraId) || !project.scope?.tasks?.self) continue;
+    const current = outsideByJira.get(jiraId);
+    if (!current || (project.status === "IN_PROGRESS" && current.status !== "IN_PROGRESS")) outsideByJira.set(jiraId, project);
+  }
+  const taskRows = await mapPool([...outsideByJira.entries()], 4, async ([jiraId, project]) => {
+    const title = project.scope?.source?.title || shortName(project.name) || jiraId;
+    const tasks = await tempoOffset<{ taskLink?: { linked?: { originId?: string } } }>(project.scope!.tasks!.self!);
+    return { jiraId, title, tasks };
+  });
+  const usedSlugs = new Set(profit.clients.map((client) => client.slug));
+  const tempoIssues = new Map<string, { slug: string; name: string }>();
+  for (const row of taskRows) {
+    let slug = slugify(shortName(row.title)) || `tempo-${row.jiraId}`;
+    if (usedSlugs.has(slug)) slug = `${slug}-${row.jiraId}`;
+    usedSlugs.add(slug);
+    const name = shortName(row.title) || row.title;
+    for (const task of row.tasks) {
+      const origin = task.taskLink?.linked?.originId;
+      if (!origin || knownIssues.has(origin)) continue;
+      tempoIssues.set(origin, { slug, name });
+    }
+  }
+
+  const names = new Map<string, string>();
+  const entries: TimeEntry[] = [];
+  for (const worklog of worklogs) {
+    if (!worklog.startDate || worklog.startDate < from || worklog.startDate > to) continue;
+    const issueId = worklog.issue?.id ? String(worklog.issue.id) : "";
+    const project = (issueId && (knownIssues.get(issueId) || tempoIssues.get(issueId))) || namedFromNote(worklog.description || "");
+    names.set(project.slug, project.name);
+    const description = (worklog.description || "").trim().slice(0, 300);
+    entries.push({
+      id: `team-${worklog.tempoWorklogId}`,
+      clientSlug: project.slug,
+      date: worklog.startDate,
+      member: memberNames.get(worklog.author?.accountId || "") || "Unassigned",
+      taskId: issueId || "—",
+      task: issueId ? "Jira issue" : "Untagged time",
+      description: description || "No description in Tempo",
+      minutes: (worklog.timeSpentSeconds || 0) / 60,
+      cost: 0,
+    });
+  }
+
+  const clients = [...profit.clients];
+  for (const [slug, name] of names) {
+    if (clients.some((client) => client.slug === slug)) continue;
+    clients.push({
+      slug,
+      name,
+      budgetAmount: 0,
+      allocatedHours: null,
+      billableRate: null,
+      renewalKind: "unknown",
+      renewalDate: null,
+      renewalMonth: 0,
+      renewalLabel: "—",
+      contractStart: from,
+      contractEnd: to,
+    });
+  }
+  clients.sort((a, b) => a.name.localeCompare(b.name));
+  return { ...profit, clients, entries, reportSlugs: profit.clients.map((client) => client.slug) };
+}
+
+function namedFromNote(description: string) {
+  const match = description.match(/work item\s+([A-Z][A-Z0-9]{1,12})-\d+/i);
+  if (!match) return { slug: OTHER_TRACKED_SLUG, name: "Other tracked time" };
+  const key = match[1].toUpperCase();
+  return { slug: projectKeySlug(key), name: key };
 }
 
 function filterProfitData(data: ProfitabilityData, slug: string): ProfitabilityData {
@@ -123,6 +245,7 @@ async function loadTempoProfitability(opts?: { slug?: string }): Promise<Profita
       return accountId && name ? [[accountId, name] as const] : [];
     })
   );
+  const roster = [...new Set(memberNames.values())].sort((a, b) => a.localeCompare(b));
   const projectByJira = new Map<string, TempoProject>();
   for (const project of projects) {
     const jiraId = project.scope?.source?.reference;
@@ -238,6 +361,7 @@ async function loadTempoProfitability(opts?: { slug?: string }): Promise<Profita
     costRates,
     monthlyOverhead: costSheet.monthlyOverhead,
     payingAllocatedHours: payingAllocatedHours(allocations),
+    roster,
   };
 }
 

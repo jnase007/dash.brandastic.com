@@ -23,6 +23,13 @@ const BASE: Item[] = [
     href: "/profitability",
     group: "Navigate",
   },
+  {
+    id: "team",
+    label: "Team Performance",
+    hint: "Hours and labor cost by person",
+    href: "/profitability/team",
+    group: "Navigate",
+  },
   { id: "meta", label: "Meta Ads", href: "/meta", group: "Navigate" },
   { id: "google", label: "Google Ads", href: "/google", group: "Navigate" },
   { id: "deep", label: "Deep Analysis", href: "/deep-analysis", group: "Navigate" },

@@ -48,15 +48,26 @@ export function Sidebar() {
 
       <nav className="nav">
         {links.map((l) => {
+          const onTeam = pathname === "/profitability/team" || pathname.startsWith("/profitability/team/");
           const active =
             l.href === "/"
               ? pathname === "/"
-              : pathname === l.href || pathname.startsWith(l.href + "/");
+              : l.href === "/profitability"
+                ? pathname === "/profitability" || (pathname.startsWith("/profitability/") && !onTeam)
+                : pathname === l.href || pathname.startsWith(l.href + "/");
           return (
-            <Link key={l.href} href={l.href} className={active ? "active" : ""}>
-              <span className="nav-icon">{l.icon}</span>
-              {l.label}
-            </Link>
+            <span key={l.href} className="nav-group">
+              <Link href={l.href} className={active ? "active" : ""}>
+                <span className="nav-icon">{l.icon}</span>
+                {l.label}
+              </Link>
+              {l.href === "/profitability" ? (
+                <Link href="/profitability/team" className={onTeam ? "sub active" : "sub"}>
+                  <span className="nav-icon">↳</span>
+                  Team
+                </Link>
+              ) : null}
+            </span>
           );
         })}
       </nav>

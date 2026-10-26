@@ -280,6 +280,18 @@ code {
   gap: 6px;
 }
 
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav a.sub {
+  margin-left: 28px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
 .nav a {
   display: flex;
   align-items: center;
@@ -3427,6 +3439,273 @@ code {
   font-weight: 700;
   text-align: right;
   color: #0f172a;
+}
+
+.pr-donut-legend .pr-member-link {
+  color: #5b21b6;
+  cursor: pointer;
+}
+
+.pr-donut-legend .pr-member-link:hover {
+  text-decoration: underline;
+}
+
+.tm-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tm-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.tm-bar-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 48px;
+  gap: 10px;
+  align-items: center;
+}
+
+.tm-bar-row > a {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.tm-bar-row > a:hover {
+  color: #5b21b6;
+}
+
+.tm-bar-row > em {
+  font-style: normal;
+  text-align: right;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tm-bar {
+  position: relative;
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f1f5f9;
+}
+
+.tm-seg {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+}
+
+.tm-bar .pr-tip {
+  left: 12px;
+  bottom: 18px;
+  transform: none;
+}
+
+.tm-search,
+.tm-log-tools select {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12px;
+  color: #334155;
+}
+
+.pr-table th button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tm-row {
+  cursor: pointer;
+}
+
+.tm-row a {
+  color: #0f172a;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.tm-row:hover td {
+  background: #f5f3ff;
+}
+
+.tm-note {
+  margin: 0 0 12px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.tm-note button {
+  border: 0;
+  background: transparent;
+  color: #6d28d9;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.tm-alloc {
+  display: grid;
+  gap: 8px;
+}
+
+.tm-alloc-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+
+.tm-alloc-row.active {
+  background: #f5f3ff;
+}
+
+.tm-alloc-row a,
+.tm-alloc-row .tm-project {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.tm-alloc-row a:hover {
+  color: #5b21b6;
+}
+
+.tm-alloc-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  overflow: hidden;
+}
+
+.tm-alloc-track span {
+  display: block;
+  height: 100%;
+  background: #7c3aed;
+  border-radius: inherit;
+}
+
+.tm-alloc-row em,
+.tm-alloc-row b {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.tm-alloc-row b {
+  color: #0f172a;
+  min-width: 4.5rem;
+  text-align: right;
+}
+
+.tm-trend {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-height: 180px;
+}
+
+.tm-trend-col {
+  flex: 1;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  min-width: 0;
+}
+
+.tm-trend-plot {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  height: 140px;
+}
+
+.tm-trend-stack {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 4px;
+  border-radius: 8px 8px 2px 2px;
+  overflow: hidden;
+}
+
+.tm-trend-stack span {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+}
+
+.tm-trend-col > span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.tm-log {
+  max-height: 420px;
+}
+
+.tm-log-tools {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tm-note-cell {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #64748b;
+}
+
+.pr-table td a {
+  color: #5b21b6;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.pr-table td .tm-project {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+@media (max-width: 800px) {
+  .tm-kpis,
+  .tm-alloc-row,
+  .tm-bar-row {
+    grid-template-columns: 1fr;
+  }
+
+  .tm-bar-row > em,
+  .tm-alloc-row b,
+  .tm-alloc-row em {
+    text-align: left;
+  }
 }
 
 .pr-search input {
