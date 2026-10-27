@@ -9,7 +9,7 @@ import {
 } from "./profitability";
 
 export const INTERNAL_SLUG = "brandastic";
-/** Time whose Jira project Tempo does not name. */
+/** Time with no Jira issue, or an issue Jira did not name. */
 export const OTHER_TRACKED_SLUG = "other-tracked";
 
 export function projectKeySlug(key: string) {

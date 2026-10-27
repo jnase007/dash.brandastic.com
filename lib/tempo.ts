@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import type { CostRate, ProfitabilityData, ProfitClient, RenewalKind, TimeEntry } from "./profitability";
 import { contractYearWindow, formatEntryDate, quarterStartDate } from "./profitability";
+import { lookupJiraIssues } from "./jira";
 import { OTHER_TRACKED_SLUG, projectKeySlug } from "./team";
 
 const TEMPO_BASE = "https://api.tempo.io";
@@ -77,12 +78,12 @@ export async function getTempoProfitabilityForSlug(slug: string): Promise<Profit
   }
 }
 
-const TEAM_VERSION = 1;
+const TEAM_VERSION = 2;
 let teamCache: { at: number; version: number; data: ProfitabilityData } | null = null;
 
 const loadCachedTeamPerformance = unstable_cache(
   async () => loadTeamPerformance(),
-  ["tempo-team-performance-v1"],
+  ["tempo-team-performance-v2"],
   { revalidate: 300, tags: ["tempo-profitability"] }
 );
 
@@ -149,13 +150,56 @@ async function loadTeamPerformance(): Promise<ProfitabilityData> {
     }
   }
 
+  const sheetByJira = new Map<string, { slug: string; name: string }>();
+  {
+    const used = new Set<string>();
+    for (const [jiraId, allocation] of allocations) {
+      const name = allocation.name || jiraId;
+      let slug = slugify(name) || jiraId;
+      if (used.has(slug)) slug = `${slug}-${jiraId}`;
+      used.add(slug);
+      sheetByJira.set(jiraId, { slug, name });
+    }
+  }
+  const unresolved: string[] = [];
+  const seenIssues = new Set<string>();
+  for (const worklog of worklogs) {
+    const issueId = worklog.issue?.id ? String(worklog.issue.id) : "";
+    if (!issueId || seenIssues.has(issueId) || knownIssues.has(issueId) || tempoIssues.has(issueId)) continue;
+    seenIssues.add(issueId);
+    unresolved.push(issueId);
+  }
+  const jiraIssues = await lookupJiraIssues(unresolved);
+
   const names = new Map<string, string>();
+  const nameRank = new Map<string, number>();
+  const remember = (slug: string, name: string, rank: number) => {
+    if ((nameRank.get(slug) || 0) > rank) return;
+    nameRank.set(slug, rank);
+    names.set(slug, name);
+  };
   const entries: TimeEntry[] = [];
   for (const worklog of worklogs) {
     if (!worklog.startDate || worklog.startDate < from || worklog.startDate > to) continue;
     const issueId = worklog.issue?.id ? String(worklog.issue.id) : "";
-    const project = (issueId && (knownIssues.get(issueId) || tempoIssues.get(issueId))) || namedFromNote(worklog.description || "");
-    names.set(project.slug, project.name);
+    let project = issueId ? knownIssues.get(issueId) || tempoIssues.get(issueId) : undefined;
+    let rank = project ? 3 : 0;
+    if (!project && issueId) {
+      const jira = jiraIssues.get(issueId);
+      const sheet = jira ? sheetByJira.get(jira.projectId) : undefined;
+      if (sheet) {
+        project = sheet;
+        rank = 3;
+      } else if (jira) {
+        project = { slug: projectKeySlug(jira.key), name: jira.name || jira.key };
+        rank = 2;
+      }
+    }
+    if (!project) {
+      project = namedFromNote(worklog.description || "");
+      rank = project.slug === OTHER_TRACKED_SLUG ? 2 : 1;
+    }
+    remember(project.slug, project.name, rank);
     const description = (worklog.description || "").trim().slice(0, 300);
     entries.push({
       id: `team-${worklog.tempoWorklogId}`,
