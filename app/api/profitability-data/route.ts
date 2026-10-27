@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTempoProfitability } from "@/lib/tempo";
+import { getTempoProfitability, getTempoProfitabilityForSlug } from "@/lib/tempo";
 
 const ALLOW = new Set(["https://brandastic.co", "https://www.brandastic.co", "http://localhost:5173"]);
 
@@ -22,7 +22,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   try {
-    const data = await getTempoProfitability();
+    const slug = new URL(req.url).searchParams.get("slug")?.trim() || "";
+    const data = slug ? await getTempoProfitabilityForSlug(slug) : await getTempoProfitability();
     return NextResponse.json(data, {
       headers: { "Access-Control-Allow-Origin": origin, "Cache-Control": "s-maxage=120" },
     });
