@@ -14,10 +14,12 @@ import {
 } from "@/lib/profitability";
 import {
   INTERNAL_SLUG,
+  OTHER_TRACKED_SLUG,
   TEAM_RANGES,
   buildTeam,
   personTrend,
   topSegments,
+  type ClientSlice,
   type TeamPerson,
   type TeamRange,
 } from "@/lib/team";
@@ -371,23 +373,13 @@ function PersonView({
         ) : (
           <p className="tm-note">No tracked time in this period.</p>
         )}
-        <div className="tm-alloc">
-          {person.clients.map((slice) => {
-            const pct = person.minutes ? (slice.minutes / person.minutes) * 100 : 0;
-            return (
-              <div key={slice.slug} className={slice.slug === client ? "tm-alloc-row active" : "tm-alloc-row"}>
-                <ProjectName slug={slice.slug} name={slice.name} range={range} linked={reportSlugs.has(slice.slug)} />
-                <div className="tm-alloc-track">
-                  <span style={{ width: `${pct}%`, background: slice.slug === INTERNAL_SLUG ? "#94a3b8" : undefined }} />
-                </div>
-                <em>
-                  {formatHours(slice.minutes / 60)}h · {formatPct(pct)}%
-                </em>
-                <b>{slice.labor == null ? "—" : formatMoney(slice.labor)}</b>
-              </div>
-            );
-          })}
-        </div>
+        <AllocationDonut
+          clients={person.clients}
+          totalMinutes={person.minutes}
+          range={range}
+          reportSlugs={reportSlugs}
+          activeSlug={client}
+        />
       </article>
 
       <article className="pr-panel">
@@ -440,6 +432,105 @@ function TrendChart({ buckets }: { buckets: ReturnType<typeof personTrend> }) {
           {formatHours(current.minutes / 60)}h
         </span>
       ) : null}
+    </div>
+  );
+}
+
+const ALLOC_COLORS = ["#5b21b6", "#7c3aed", "#2563eb", "#0f766e", "#0369a1", "#4c1d95", "#6d28d9", "#3b82f6"];
+
+function allocationColor(slug: string, index: number) {
+  if (slug === INTERNAL_SLUG) return "#94a3b8";
+  if (slug === OTHER_TRACKED_SLUG) return "#64748b";
+  return ALLOC_COLORS[index % ALLOC_COLORS.length];
+}
+
+function AllocationDonut({
+  clients,
+  totalMinutes,
+  range,
+  reportSlugs,
+  activeSlug,
+}: {
+  clients: ClientSlice[];
+  totalMinutes: number;
+  range: TeamRange;
+  reportSlugs: Set<string>;
+  activeSlug?: string;
+}) {
+  const [hover, setHover] = useState<string | null>(null);
+  const slices = clients.filter((slice) => slice.minutes > 0);
+  const active = hover || activeSlug || null;
+  const radius = 68;
+  const circumference = 2 * Math.PI * radius;
+  let cursor = 0;
+  const activeSlice = slices.find((slice) => slice.slug === active);
+  if (!slices.length || totalMinutes <= 0) return null;
+
+  return (
+    <div className="pr-donut-wrap tm-alloc-donut">
+      <div className="pr-donut">
+        <svg viewBox="0 0 200 200" role="img" aria-label="Client allocation">
+          <g transform="rotate(-90 100 100)">
+            {slices.map((slice, index) => {
+              const length = (slice.minutes / totalMinutes) * circumference;
+              const gap = length > 6 ? 2 : 0;
+              const visible = Math.max(length - gap, 0);
+              const dash = `${visible} ${circumference - visible}`;
+              const offset = -cursor;
+              cursor += length;
+              return (
+                <circle
+                  key={slice.slug}
+                  cx="100"
+                  cy="100"
+                  r={radius}
+                  fill="none"
+                  stroke={allocationColor(slice.slug, index)}
+                  strokeWidth="26"
+                  strokeDasharray={dash}
+                  strokeDashoffset={offset}
+                  opacity={!active || active === slice.slug ? 1 : 0.35}
+                  onMouseEnter={() => setHover(slice.slug)}
+                  onMouseLeave={() => setHover(null)}
+                />
+              );
+            })}
+          </g>
+          <text x="100" y="96" textAnchor="middle" className="pr-donut-value">
+            {formatHours(totalMinutes / 60)}h
+          </text>
+          <text x="100" y="116" textAnchor="middle" className="pr-donut-sub">
+            logged
+          </text>
+        </svg>
+        {activeSlice ? (
+          <div className="pr-tip floating" role="tooltip">
+            <strong>{activeSlice.name}</strong>
+            {formatPct((activeSlice.minutes / totalMinutes) * 100)}% · {formatHoursMinutes(activeSlice.minutes)}
+            {activeSlice.labor == null ? "" : ` · ${formatMoney(activeSlice.labor)}`}
+          </div>
+        ) : null}
+      </div>
+      <ul className="pr-donut-legend">
+        {slices.map((slice, index) => {
+          const pct = (slice.minutes / totalMinutes) * 100;
+          return (
+            <li
+              key={slice.slug}
+              className={active === slice.slug ? "active" : ""}
+              onMouseEnter={() => setHover(slice.slug)}
+              onMouseLeave={() => setHover(null)}
+            >
+              <i style={{ background: allocationColor(slice.slug, index) }} />
+              <ProjectName slug={slice.slug} name={slice.name} range={range} linked={reportSlugs.has(slice.slug)} />
+              <em>
+                {formatPct(pct)}% · {formatHoursMinutes(slice.minutes)}
+              </em>
+              <b>{slice.labor == null ? "—" : formatMoney(slice.labor)}</b>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
