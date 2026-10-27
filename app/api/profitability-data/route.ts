@@ -25,7 +25,10 @@ export async function GET(req: Request) {
     const slug = new URL(req.url).searchParams.get("slug")?.trim() || "";
     const data = slug ? await getTempoProfitabilityForSlug(slug) : await getTempoProfitability();
     return NextResponse.json(data, {
-      headers: { "Access-Control-Allow-Origin": origin, "Cache-Control": "s-maxage=120" },
+      headers: {
+        "Access-Control-Allow-Origin": origin,
+        "Cache-Control": "public, max-age=120, s-maxage=300, stale-while-revalidate=1800",
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Tempo could not be loaded.";
