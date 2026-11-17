@@ -1,13 +1,28 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import { parseCustomRange } from "@/lib/format";
 
 type Point = { t: number; date: string; spend: number };
 
-function sampleSeries(): Point[] {
+function daysFromRange(range: string) {
+  const custom = parseCustomRange(range);
+  if (custom) {
+    const a = Date.parse(custom.since);
+    const b = Date.parse(custom.until);
+    if (Number.isFinite(a) && Number.isFinite(b) && b >= a) {
+      return Math.max(1, Math.round((b - a) / 86400000) + 1);
+    }
+  }
+  const n = parseInt(range, 10);
+  return Number.isFinite(n) && n > 0 ? n : 30;
+}
+
+function sampleSeries(days: number): Point[] {
   const out: Point[] = [];
-  const start = Date.UTC(2026, 8, 18);
-  for (let i = 0; i < 60; i++) {
+  const end = Date.UTC(2026, 10, 17);
+  const start = end - (days - 1) * 86400000;
+  for (let i = 0; i < days; i++) {
     const t = start + i * 86400000;
     const spend = 420 + Math.round(180 * Math.sin(i / 6) + 90 * Math.sin(i / 13) + (i % 7) * 12);
     out.push({ t, date: new Date(t).toISOString().slice(0, 10), spend });
@@ -46,16 +61,10 @@ function loadCss(href: string) {
   document.head.appendChild(el);
 }
 
-export function ChartLab() {
-  const data = useMemo(sampleSeries, []);
+export function ChartLab({ range }: { range: string }) {
+  const days = daysFromRange(range);
+  const data = useMemo(() => sampleSeries(days), [days]);
   const host = useRef<HTMLDivElement>(null);
-  const plotRef = useRef<any>(null);
-
-  const resetZoom = () => {
-    const plot = plotRef.current;
-    if (!plot) return;
-    plot.setScale("x", { min: data[0].t / 1000, max: data[data.length - 1].t / 1000 });
-  };
 
   useEffect(() => {
     let dead = false;
@@ -71,12 +80,9 @@ export function ChartLab() {
         {
           width: host.current.clientWidth || 600,
           height: 320,
-          cursor: { drag: { x: true, y: false } },
+          cursor: { drag: { x: false, y: false, setScale: false } },
           scales: { x: { time: true } },
-          axes: [
-            { stroke: "#64748b" },
-            { stroke: "#64748b", size: 56 },
-          ],
+          axes: [{ stroke: "#64748b" }, { stroke: "#64748b", size: 56 }],
           series: [
             {},
             { label: "Spend", stroke: "#1644ED", fill: "rgba(22,68,237,0.12)", width: 2 },
@@ -85,7 +91,6 @@ export function ChartLab() {
         [data.map((p) => p.t / 1000), data.map((p) => p.spend)],
         host.current
       );
-      plotRef.current = plot;
       ro = new ResizeObserver(() => plot.setSize({ width: host.current?.clientWidth || 600, height: 320 }));
       ro.observe(host.current);
     }
@@ -95,30 +100,16 @@ export function ChartLab() {
       dead = true;
       ro?.disconnect();
       plot?.destroy();
-      plotRef.current = null;
     };
   }, [data]);
 
   return (
     <div className="mt-8">
       <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">uPlot</h2>
-            <p className="text-xs font-medium text-blue-700">MIT · free · ~45KB</p>
-          </div>
-          <button
-            type="button"
-            onClick={resetZoom}
-            className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            Reset / show all days
-          </button>
-        </div>
-        <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-neutral-600">
-          <li>Click and drag left or right on the chart to zoom that date range (point A to B).</li>
-          <li>Click <b>Reset / show all days</b> to go back in time to the full 60 days. Double-click the plot also resets.</li>
-        </ol>
+        <h2 className="text-lg font-semibold">uPlot</h2>
+        <p className="mt-1 text-sm text-neutral-600">
+          Period is the selector above ({days} days). Hover for values. No date brushing on the chart.
+        </p>
         <div ref={host} className="mt-3 h-[320px] w-full" />
       </section>
     </div>
