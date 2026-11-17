@@ -1,23 +1,19 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { DeepAnalysisControls } from "@/components/DeepAnalysisControls";
-import { MetricCard } from "@/components/MetricCard";
+import { DeepAnalysisVisuals } from "@/components/DeepAnalysisVisuals";
+import { KpiSparkChart } from "@/components/analysis/KpiSparkChart";
 import { RangeSelect } from "@/components/RangeSelect";
 import { StatusBadge } from "@/components/StatusBadge";
-import { RESULT_GROUPS } from "@/lib/deep-analysis/metrics";
+import { DEFAULT_RESULT_KEY, deltaTone, normalizeResultKey } from "@/lib/deep-analysis/catalog";
+import { TABLE_KEYS, campaignDetailHref, formatCatalogValue, formatDeltaArrow } from "@/lib/deep-analysis/board";
 import {
-  compactRangeLabel,
-  money,
-  normalizeRange,
-  num,
-  ratio,
-} from "@/lib/format";
-import {
-  getLiveDeepAnalysis,
-  listLiveDeepAccounts,
+  getClientAnalysis,
+  listAnalysisClients,
   liveDeepStatus,
-} from "@/lib/live-deep-analysis";
-import { METRIC_COLUMNS, formatMetricCell } from "@/lib/metric-columns";
+} from "@/lib/deep-analysis/load";
+import { clientHasGoogle, clientHasMeta } from "@/lib/clients";
+import { compactRangeLabel, normalizeRange } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -27,37 +23,42 @@ export default async function DeepAnalysisPage({
 }: {
   searchParams: Promise<{
     range?: string;
+    slug?: string;
+    channel?: string;
+    resultGroup?: string;
     platform?: string;
     accountId?: string;
-    resultGroup?: string;
   }>;
 }) {
   const sp = await searchParams;
   const range = normalizeRange(sp.range || "30d");
-  const platform = (sp.platform === "google" ? "google" : "meta") as "meta" | "google";
-  const resultGroup =
-    sp.resultGroup && RESULT_GROUPS[sp.resultGroup] ? sp.resultGroup : "purchases";
+  const resultGroup = normalizeResultKey(sp.resultGroup) || DEFAULT_RESULT_KEY;
   const status = liveDeepStatus();
-  const accounts = listLiveDeepAccounts();
-  const platformAccounts = accounts.filter((a) => a.platform === platform);
-  const accountId = sp.accountId || platformAccounts[0]?.id || "";
+  const clients = listAnalysisClients();
+  const slug = sp.slug || clients[0]?.slug || "";
+  const requested = (sp.channel || "").toLowerCase();
+  const channel =
+    requested === "meta" || requested === "google" || requested === "combined"
+      ? requested
+      : undefined;
 
-  let analysis: Awaited<ReturnType<typeof getLiveDeepAnalysis>> | null = null;
+  let analysis: Awaited<ReturnType<typeof getClientAnalysis>> | null = null;
   let analysisError = "";
-  if (accountId) {
+  if (slug) {
     try {
-      analysis = await getLiveDeepAnalysis({
-        platform,
-        accountId,
+      analysis = await getClientAnalysis({
+        slug,
         range,
+        channel,
         resultGroup,
+        platform: sp.platform === "google" || sp.platform === "meta" ? sp.platform : undefined,
+        accountId: sp.accountId,
       });
     } catch (e: any) {
       analysisError = e?.message || "Failed to load analysis";
     }
   }
 
-  const t = analysis?.totals;
   const configured = status.configured;
 
   return (
@@ -66,11 +67,13 @@ export default async function DeepAnalysisPage({
         <div>
           <h1>Deep Analysis</h1>
           <p>
-            Live Meta + Google connectors · no warehouse ·{" "}
-            {compactRangeLabel(range)}
+            Live Meta + Google · campaign × day · {compactRangeLabel(range)}
           </p>
         </div>
         <div className="top-actions">
+          <Link href="/chart-lab" className="text-sm font-medium text-blue-600 hover:underline">
+            Chart lab (temp)
+          </Link>
           <StatusBadge
             status={
               !configured
@@ -89,44 +92,20 @@ export default async function DeepAnalysisPage({
       </div>
 
       <div className="notice">
-        Review-only live pull. Same reusable metric columns as Compare. Daily
-        series, campaign split, anomaly flags, and a 7-day projection come from
-        Ads Manager / Meta / Google, not a warehouse.
-      </div>
-
-      <div className="grid metrics" style={{ marginBottom: 16 }}>
-        <MetricCard
-          label="Live stack"
-          value={configured ? "Meta + Google" : "Not linked"}
-          sub={`Meta ${status.connection.meta} · Google ${status.connection.google}`}
-        />
-        <MetricCard
-          label="Mapped Meta"
-          value={num(status.counts.meta_accounts)}
-          sub={`${num(status.counts.clients)} clients`}
-        />
-        <MetricCard
-          label="Mapped Google"
-          value={num(status.counts.google_customers)}
-          sub="Existing dash connectors"
-        />
-        <MetricCard
-          label="Compare"
-          value="3 windows"
-          sub="Same dates last month and last year"
-        />
+        Review-only. Ratios from period sums. Hide paused is not used here.
+        Status is new / gone / active from spend in each window.
       </div>
 
       <Suspense fallback={null}>
         <DeepAnalysisControls
-          platform={platform}
-          accountId={accountId}
-          resultGroup={resultGroup}
-          accounts={accounts.map((a) => ({
-            platform: a.platform,
-            id: a.id,
-            name: a.name,
-            currency: a.currency,
+          slug={analysis?.client.slug || slug}
+          channel={analysis?.channel || "combined"}
+          resultGroup={analysis?.resultGroup || resultGroup}
+          clients={clients.map((c) => ({
+            slug: c.slug,
+            name: c.name,
+            hasMeta: clientHasMeta(c),
+            hasGoogle: clientHasGoogle(c),
           }))}
           resultGroups={status.resultGroups}
         />
@@ -139,169 +118,222 @@ export default async function DeepAnalysisPage({
         </div>
       ) : null}
 
-      {!accountId ? (
-        <div className="card" style={{ marginTop: 16 }}>
-          <h3>No mapped accounts</h3>
-          <p className="muted">
-            Add a Meta act_ or Google customer ID on the client roster to analyze
-            live data.
-          </p>
-        </div>
-      ) : null}
-
-      {analysis && t ? (
+      {analysis ? (
         <>
-          <div className="grid metrics" style={{ marginTop: 16, marginBottom: 16 }}>
-            {METRIC_COLUMNS.map((col) => (
-              <MetricCard
-                key={col.key}
-                label={col.label}
-                value={formatMetricCell(analysis.metrics, col)}
-                sub={
-                  col.key === "conversions"
-                    ? analysis.resultGroupLabel
-                    : col.key === "roas"
-                      ? `Revenue ${money(t.revenue)}`
-                      : undefined
-                }
-              />
-            ))}
+          <p className="muted" style={{ margin: "12px 0 8px", fontSize: 13 }}>
+            Analyzing {analysis.current.since} – {analysis.current.until} ·
+            comparing with {analysis.previous.since} – {analysis.previous.until}{" "}
+            · data complete through {analysis.current.until}
+          </p>
+
+          <div className="grid metrics" style={{ marginBottom: 16 }}>
+            {analysis.kpi.tiles.map((tile) => {
+              const tone = deltaTone(tile.key, tile.delta);
+              return (
+                <div key={tile.key} className="card metric-card premium">
+                  <div className="metric-card-top">
+                    <div className="metric-label">{tile.label}</div>
+                    <span className={`delta-pill ${tone === "good" ? "good" : tone === "bad" ? "bad" : "flat"}`}>
+                      {formatDeltaArrow(tile.delta)}
+                    </span>
+                  </div>
+                  <div className="metric-value mono">
+                    {formatCatalogValue(tile.key, tile.value)}
+                  </div>
+                  <div className="metric-sub">
+                    prev {formatCatalogValue(tile.key, tile.previous)}
+                    {tile.target
+                      ? ` · target ${formatCatalogValue("cost_per_result", tile.target.value)} (${tile.target.pct}%)`
+                      : ""}
+                  </div>
+                  <KpiSparkChart
+                    metricKey={tile.key}
+                    label={tile.label}
+                    unit={tile.unit}
+                    points={tile.sparkPoints}
+                  />
+                </div>
+              );
+            })}
           </div>
 
-          <div className="grid two">
-            <div className="card">
-              <h3>Daily trend</h3>
-              <p className="muted" style={{ marginBottom: 10 }}>
-                {analysis.account.name} · {analysis.range.since} → {analysis.range.until}
-                {t.reachNotAdditive ? " · reach is not additive" : ""}
-              </p>
-              <div style={{ overflowX: "auto" }}>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Spend</th>
-                      <th>Clicks</th>
-                      <th>Results</th>
-                      <th>Revenue</th>
-                      <th>CPA</th>
-                      <th>ROAS</th>
-                      <th>Flag</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {analysis.daily.map((d) => (
-                      <tr key={d.date}>
-                        <td className="mono">{d.date}</td>
-                        <td className="mono">{money(d.spend)}</td>
-                        <td className="mono">{num(d.clicks)}</td>
-                        <td className="mono">{num(d.results)}</td>
-                        <td className="mono">{money(d.revenue)}</td>
-                        <td className="mono">{money(d.cpa)}</td>
-                        <td className="mono">{ratio(d.roas)}</td>
-                        <td>{d.anomaly?.flag ? "⚠" : ""}</td>
-                      </tr>
-                    ))}
-                    {!analysis.daily.length ? (
-                      <tr>
-                        <td colSpan={8} className="muted">
-                          No daily rows in this range.
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="card">
-              <h3>Campaigns</h3>
-              <table className="table">
+          <div className="card" style={{ marginBottom: 16 }}>
+            <h3>Campaigns</h3>
+            <p className="muted" style={{ marginBottom: 10 }}>
+              Current vs previous window. Reach / frequency are Meta only and
+              null on the total row. Open a campaign for ads. Ads stay off this load.
+            </p>
+            <div className="table-scroll">
+              <table className="table clients-table">
                 <thead>
                   <tr>
                     <th>Campaign</th>
-                    <th>Spend</th>
-                    <th>Results</th>
-                    <th>CPA</th>
-                    <th>ROAS</th>
+                    <th>Status</th>
+                    {TABLE_KEYS.map((key) => (
+                      <th key={key}>{key.replace(/_/g, " ")}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {analysis.campaigns.map((c) => (
-                    <tr key={c.id}>
-                      <td>{c.name}</td>
-                      <td className="mono">{money(c.spend)}</td>
-                      <td className="mono">{num(c.results)}</td>
-                      <td className="mono">{money(c.cpa)}</td>
-                      <td className="mono">{ratio(c.roas)}</td>
+                    <tr key={c.id} className="row-clickable">
+                      <td>
+                        <Link
+                          href={campaignDetailHref({
+                            slug: analysis.client.slug,
+                            campaignId: c.campaignId,
+                            range,
+                            channel: c.channel,
+                            accountId: c.accountId,
+                          })}
+                          className="campaign-link"
+                        >
+                          {c.name}
+                        </Link>{" "}
+                        <span className="badge sm">{c.channel}</span>
+                      </td>
+                      <td>
+                        <span className="badge sm">{c.status}</span>
+                      </td>
+                      {TABLE_KEYS.map((key) => (
+                        <td key={key} className="mono">
+                          {formatCatalogValue(key, c.current.derived[key])}
+                          <div className="muted" style={{ fontSize: 11 }}>
+                            {formatDeltaArrow(c.delta[key] ?? null)}
+                          </div>
+                        </td>
+                      ))}
                     </tr>
                   ))}
+                  <tr>
+                    <td colSpan={2}>Total</td>
+                    {TABLE_KEYS.map((key) => (
+                      <td key={key} className="mono">
+                        {key === "reach" || key === "frequency"
+                          ? "—"
+                          : formatCatalogValue(key, analysis.campaignTotal.derived[key])}
+                      </td>
+                    ))}
+                  </tr>
                   {!analysis.campaigns.length ? (
                     <tr>
-                      <td colSpan={5} className="muted">
-                        No campaign rows yet.
+                      <td colSpan={2 + TABLE_KEYS.length} className="muted">
+                        No campaign rows in these windows.
                       </td>
                     </tr>
                   ) : null}
                 </tbody>
               </table>
-
-              <h3 style={{ marginTop: 20 }}>7-day projection</h3>
-              <p className="muted" style={{ marginBottom: 8 }}>
-                Spend and results projected separately. CPA = projected spend ÷
-                projected results.
-              </p>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Day +</th>
-                    <th>Spend</th>
-                    <th>Results</th>
-                    <th>CPA</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(analysis.projection?.spend?.forecast || []).map((s, i) => (
-                    <tr key={i}>
-                      <td className="mono">+{i + 1}</td>
-                      <td className="mono">{money(s)}</td>
-                      <td className="mono">{num(analysis.projection.results.forecast[i])}</td>
-                      <td className="mono">{money(analysis.projection.cpa[i])}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </div>
 
-          <div className="card" style={{ marginTop: 16 }}>
+          <DeepAnalysisVisuals
+            costLabel={analysis.costLabel}
+            targetCpa={analysis.client.targetCpa}
+            daily={analysis.kpi.daily.map((d) => ({
+              date: d.date,
+              spend: d.sums.spend,
+              results: d.sums.results,
+              impressions: d.sums.impressions,
+              clicks: d.sums.clicks,
+              cost: d.derived.cost_per_result,
+              ctr: d.derived.ctr,
+              cpc: d.derived.cpc,
+              cpm: d.derived.cpm,
+              conv_rate: d.derived.conv_rate,
+            }))}
+            diagnosis={analysis.diagnosis}
+            efficiency={analysis.efficiency}
+            curve={analysis.curve}
+            campaigns={analysis.campaigns.map((c) => ({
+              id: c.id,
+              name: c.name,
+              channel: c.channel,
+              status: c.status,
+              spend0: c.previous.sums.spend,
+              spend1: c.current.sums.spend,
+              results0: c.previous.sums.results,
+              results1: c.current.sums.results,
+              cost0: c.previous.derived.cost_per_result,
+              cost1: c.current.derived.cost_per_result,
+              clicks0: c.previous.sums.clicks,
+              clicks1: c.current.sums.clicks,
+            }))}
+          />
+
+          <div className="card" style={{ marginBottom: 16 }}>
+              <h3>Who drove it</h3>
+              {!analysis.movers.ok ? (
+                <p className="muted">{analysis.movers.reason}</p>
+              ) : (
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Campaign</th>
+                      <th>Status</th>
+                      <th>Spend</th>
+                      <th>Results</th>
+                      <th>Cost</th>
+                      <th>Impact</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analysis.movers.rows.map((m) => (
+                      <tr key={m.id} className="row-clickable">
+                        <td>
+                          <Link
+                            href={campaignDetailHref({
+                              slug: analysis.client.slug,
+                              campaignId: m.campaignId,
+                              range,
+                              channel: m.channel,
+                              accountId: m.accountId,
+                            })}
+                            className="campaign-link"
+                          >
+                            {m.name}
+                          </Link>{" "}
+                          <span className="badge sm">{m.channel}</span>
+                        </td>
+                        <td><span className="badge sm">{m.status}</span></td>
+                        <td className="mono">
+                          {formatCatalogValue("spend", m.spend1)}
+                          <div className="muted" style={{ fontSize: 11 }}>
+                            prev {formatCatalogValue("spend", m.spend0)}
+                          </div>
+                        </td>
+                        <td className="mono">
+                          {m.results1}
+                          <div className="muted" style={{ fontSize: 11 }}>prev {m.results0}</div>
+                        </td>
+                        <td className="mono">
+                          {formatCatalogValue("cost_per_result", m.cost1)}
+                          <div className="muted" style={{ fontSize: 11 }}>
+                            prev {formatCatalogValue("cost_per_result", m.cost0)}
+                          </div>
+                        </td>
+                        <td className="mono">{m.impact == null ? "—" : m.impact.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+          <div className="card">
             <h3>Notes</h3>
             <ul className="muted" style={{ paddingLeft: 18 }}>
-              {(analysis.notes || []).map((n) => (
+              {analysis.notes.map((n) => (
                 <li key={n}>{n}</li>
               ))}
               <li>
-                Compare the same dates on the <Link href="/compare">Compare tab</Link>.
+                Period comparison uses the adjacent previous window for the
+                selected range.
               </li>
             </ul>
           </div>
         </>
       ) : null}
-
-      <div className="card" style={{ marginTop: 16 }}>
-        <h3>Live connectors</h3>
-        <p className="muted" style={{ marginBottom: 8 }}>
-          Accounts come from the existing client roster, not a warehouse
-          discover job.
-        </p>
-        <p>
-          <Link href="/meta">Meta live review</Link>
-          {" · "}
-          <Link href="/google">Google live review</Link>
-          {" · "}
-          <Link href="/compare">Compare</Link>
-        </p>
-      </div>
     </div>
   );
 }
