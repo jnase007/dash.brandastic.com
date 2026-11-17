@@ -46,164 +46,81 @@ function loadCss(href: string) {
   document.head.appendChild(el);
 }
 
-function iframeDoc(body: string) {
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
-    html,body,#c{margin:0;height:100%;width:100%;font-family:system-ui,sans-serif}
-  </style></head><body>${body}</body></html>`;
-}
-
 export function ChartLab() {
   const data = useMemo(sampleSeries, []);
-  const tv = useRef<HTMLDivElement>(null);
-  const up = useRef<HTMLDivElement>(null);
+  const host = useRef<HTMLDivElement>(null);
+  const plotRef = useRef<any>(null);
 
-  const dates = JSON.stringify(data.map((p) => p.date));
-  const spends = JSON.stringify(data.map((p) => p.spend));
-  const rows = JSON.stringify(data);
-
-  const echartsSrc = iframeDoc(`
-<div id="c"></div>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"><\/script>
-<script>
-  const dates = ${dates};
-  const spends = ${spends};
-  const el = document.getElementById("c");
-  const chart = echarts.init(el);
-  chart.setOption({
-    grid: { left: 48, right: 16, top: 24, bottom: 40 },
-    tooltip: { trigger: "axis" },
-    xAxis: { type: "category", data: dates, boundaryGap: false },
-    yAxis: { type: "value" },
-    dataZoom: [
-      { type: "inside", start: 0, end: 100 },
-      { type: "slider", start: 0, end: 100, height: 18 }
-    ],
-    series: [{
-      type: "line", name: "Spend", data: spends, smooth: true, symbol: "none",
-      areaStyle: { color: "rgba(22,68,237,0.12)" },
-      lineStyle: { color: "#1644ED", width: 2 }
-    }]
-  });
-  window.addEventListener("resize", () => chart.resize());
-<\/script>`);
-
-  const amSrc = iframeDoc(`
-<div id="c"></div>
-<script type="module">
-  import * as am5 from "https://cdn.jsdelivr.net/npm/@amcharts/amcharts5@5.22.0/+esm";
-  import * as am5xy from "https://cdn.jsdelivr.net/npm/@amcharts/amcharts5@5.22.0/xy/+esm";
-  const data = ${rows};
-  const root = am5.Root.new("c");
-  const chart = root.container.children.push(am5xy.XYChart.new(root, {
-    panX: true, panY: false, wheelX: "panX", wheelY: "zoomX", pinchZoomX: true
-  }));
-  const xAxis = chart.xAxes.push(am5xy.DateAxis.new(root, {
-    baseInterval: { timeUnit: "day", count: 1 },
-    renderer: am5xy.AxisRendererX.new(root, { minGridDistance: 50 })
-  }));
-  const yAxis = chart.yAxes.push(am5xy.ValueAxis.new(root, {
-    renderer: am5xy.AxisRendererY.new(root, {})
-  }));
-  const series = chart.series.push(am5xy.SmoothedXLineSeries.new(root, {
-    name: "Spend", xAxis, yAxis, valueYField: "spend", valueXField: "t",
-    stroke: am5.color(0x1644ed), fill: am5.color(0x1644ed)
-  }));
-  series.fills.template.setAll({ fillOpacity: 0.12, visible: true });
-  series.data.setAll(data);
-  chart.set("cursor", am5xy.XYCursor.new(root, { behavior: "zoomX", xAxis }));
-  chart.set("scrollbarX", am5.Scrollbar.new(root, { orientation: "horizontal" }));
-<\/script>`);
+  const resetZoom = () => {
+    const plot = plotRef.current;
+    if (!plot) return;
+    plot.setScale("x", { min: data[0].t / 1000, max: data[data.length - 1].t / 1000 });
+  };
 
   useEffect(() => {
     let dead = false;
-    const clean: Array<() => void> = [];
+    let plot: any;
+    let ro: ResizeObserver | undefined;
+
     async function boot() {
-      await Promise.all([
-        loadScript("https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"),
-        loadScript("https://unpkg.com/uplot@1.6.32/dist/uPlot.iife.min.js"),
-      ]);
+      await loadScript("https://unpkg.com/uplot@1.6.32/dist/uPlot.iife.min.js");
       loadCss("https://unpkg.com/uplot@1.6.32/dist/uPlot.min.css");
-      if (dead) return;
+      if (dead || !host.current) return;
       const w = window as any;
-      if (tv.current && w.LightweightCharts) {
-        const chart = w.LightweightCharts.createChart(tv.current, {
-          height: 280,
-          layout: { background: { color: "#fff" }, textColor: "#334155" },
-          grid: { vertLines: { color: "#eef2f7" }, horzLines: { color: "#eef2f7" } },
-          handleScroll: { mouseWheel: true, pressedMouseMove: true },
-          handleScale: { axisPressedMouseMove: true, mouseWheel: true },
-        });
-        const series = chart.addAreaSeries({
-          lineColor: "#1644ED",
-          topColor: "rgba(22,68,237,0.28)",
-          bottomColor: "rgba(22,68,237,0.02)",
-        });
-        series.setData(data.map((p) => ({ time: p.date, value: p.spend })));
-        chart.timeScale().fitContent();
-        chart.applyOptions({ width: tv.current.clientWidth || 600 });
-        const ro = new ResizeObserver(() => chart.applyOptions({ width: tv.current?.clientWidth || 600 }));
-        ro.observe(tv.current);
-        clean.push(() => {
-          ro.disconnect();
-          chart.remove();
-        });
-      }
-      if (up.current && w.uPlot) {
-        const plot = new w.uPlot(
-          {
-            width: up.current.clientWidth || 600,
-            height: 280,
-            cursor: { drag: { x: true, y: false } },
-            scales: { x: { time: true } },
-            series: [{}, { label: "Spend", stroke: "#1644ED", fill: "rgba(22,68,237,0.12)", width: 2 }],
-          },
-          [data.map((p) => p.t / 1000), data.map((p) => p.spend)],
-          up.current
-        );
-        const ro = new ResizeObserver(() => plot.setSize({ width: up.current?.clientWidth || 600, height: 280 }));
-        ro.observe(up.current);
-        clean.push(() => {
-          ro.disconnect();
-          plot.destroy();
-        });
-      }
+      plot = new w.uPlot(
+        {
+          width: host.current.clientWidth || 600,
+          height: 320,
+          cursor: { drag: { x: true, y: false } },
+          scales: { x: { time: true } },
+          axes: [
+            { stroke: "#64748b" },
+            { stroke: "#64748b", size: 56 },
+          ],
+          series: [
+            {},
+            { label: "Spend", stroke: "#1644ED", fill: "rgba(22,68,237,0.12)", width: 2 },
+          ],
+        },
+        [data.map((p) => p.t / 1000), data.map((p) => p.spend)],
+        host.current
+      );
+      plotRef.current = plot;
+      ro = new ResizeObserver(() => plot.setSize({ width: host.current?.clientWidth || 600, height: 320 }));
+      ro.observe(host.current);
     }
+
     boot().catch(() => {});
     return () => {
       dead = true;
-      clean.forEach((fn) => fn());
+      ro?.disconnect();
+      plot?.destroy();
+      plotRef.current = null;
     };
   }, [data]);
 
   return (
-    <div className="mt-8 grid gap-6">
+    <div className="mt-8">
       <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">1. TradingView Lightweight Charts</h2>
-        <p className="text-xs font-medium text-blue-700">Apache 2.0 · free · ~45KB</p>
-        <p className="mt-1 text-sm text-neutral-600">Drag the plot or axis to zoom a range.</p>
-        <div ref={tv} className="mt-3 h-[280px] w-full" />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">uPlot</h2>
+            <p className="text-xs font-medium text-blue-700">MIT · free · ~45KB</p>
+          </div>
+          <button
+            type="button"
+            onClick={resetZoom}
+            className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Reset / show all days
+          </button>
+        </div>
+        <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-neutral-600">
+          <li>Click and drag left or right on the chart to zoom that date range (point A to B).</li>
+          <li>Click <b>Reset / show all days</b> to go back in time to the full 60 days. Double-click the plot also resets.</li>
+        </ol>
+        <div ref={host} className="mt-3 h-[320px] w-full" />
       </section>
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">2. uPlot</h2>
-        <p className="text-xs font-medium text-blue-700">MIT · free · ~45KB</p>
-        <p className="mt-1 text-sm text-neutral-600">Click-drag on X to zoom A→B. Double-click reset.</p>
-        <div ref={up} className="mt-3 h-[280px] w-full" />
-      </section>
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">3. Apache ECharts</h2>
-        <p className="text-xs font-medium text-blue-700">Apache 2.0 · free · heavier</p>
-        <p className="mt-1 text-sm text-neutral-600">Drag the line or the slider to pick a window.</p>
-        <iframe title="ECharts preview" className="mt-3 h-[300px] w-full rounded-lg border-0 bg-white" srcDoc={echartsSrc} />
-      </section>
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">4. amCharts 5</h2>
-        <p className="text-xs font-medium text-blue-700">Free with logo · paid to remove watermark</p>
-        <p className="mt-1 text-sm text-neutral-600">Click-drag to zoom X. Scrollbar under the plot.</p>
-        <iframe title="amCharts preview" className="mt-3 h-[300px] w-full rounded-lg border-0 bg-white" srcDoc={amSrc} />
-      </section>
-      <p className="text-xs text-neutral-500">
-        Lightweight Charts or uPlot if we want small files. ECharts if we need more chart types. amCharts only if we accept the logo or buy a license.
-      </p>
     </div>
   );
 }

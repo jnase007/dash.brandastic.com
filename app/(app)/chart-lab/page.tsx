@@ -9,8 +9,8 @@ export default function ChartLabPage() {
       <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Temporary</p>
       <h1 className="mt-1 text-2xl font-bold">Chart lab</h1>
       <p className="mt-2 max-w-3xl text-sm text-neutral-600">
-        Four free options to replace the Analysis charts. Same fake 60-day spend series on each.
-        Drag on the plot to zoom a range (point A to point B). This page is only for review — Analysis is unchanged.
+        uPlot only. Fake 60-day spend. Drag to zoom a date range, then Reset to go back to the full period.
+        Analysis is unchanged until we swap it in.
       </p>
       <p className="mt-2 text-sm">
         <Link href="/deep-analysis" className="text-blue-600 hover:underline">
