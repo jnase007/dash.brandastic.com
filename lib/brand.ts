@@ -72,11 +72,6 @@ export const CLIENT_BRAND: Record<
     accentSoft: "rgba(22, 163, 74, 0.12)",
     monogram: "AAH",
   },
-  "atomic-horseradish": {
-    accent: "#ea580c",
-    accentSoft: "rgba(234, 88, 12, 0.12)",
-    monogram: "AHR",
-  },
   "ch-pm": {
     accent: "#4f46e5",
     accentSoft: "rgba(79, 70, 229, 0.12)",
