@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 type Point = { t: number; date: string; spend: number };
 
@@ -46,22 +46,78 @@ function loadCss(href: string) {
   document.head.appendChild(el);
 }
 
+function iframeDoc(body: string) {
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+    html,body,#c{margin:0;height:100%;width:100%;font-family:system-ui,sans-serif}
+  </style></head><body>${body}</body></html>`;
+}
+
 export function ChartLab() {
   const data = useMemo(sampleSeries, []);
   const tv = useRef<HTMLDivElement>(null);
   const up = useRef<HTMLDivElement>(null);
-  const ec = useRef<HTMLDivElement>(null);
-  const am = useRef<HTMLDivElement>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const dates = JSON.stringify(data.map((p) => p.date));
+  const spends = JSON.stringify(data.map((p) => p.spend));
+  const rows = JSON.stringify(data);
+
+  const echartsSrc = iframeDoc(`
+<div id="c"></div>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"><\/script>
+<script>
+  const dates = ${dates};
+  const spends = ${spends};
+  const el = document.getElementById("c");
+  const chart = echarts.init(el);
+  chart.setOption({
+    grid: { left: 48, right: 16, top: 24, bottom: 40 },
+    tooltip: { trigger: "axis" },
+    xAxis: { type: "category", data: dates, boundaryGap: false },
+    yAxis: { type: "value" },
+    dataZoom: [
+      { type: "inside", start: 0, end: 100 },
+      { type: "slider", start: 0, end: 100, height: 18 }
+    ],
+    series: [{
+      type: "line", name: "Spend", data: spends, smooth: true, symbol: "none",
+      areaStyle: { color: "rgba(22,68,237,0.12)" },
+      lineStyle: { color: "#1644ED", width: 2 }
+    }]
+  });
+  window.addEventListener("resize", () => chart.resize());
+<\/script>`);
+
+  const amSrc = iframeDoc(`
+<div id="c"></div>
+<script type="module">
+  import * as am5 from "https://cdn.jsdelivr.net/npm/@amcharts/amcharts5@5.22.0/+esm";
+  import * as am5xy from "https://cdn.jsdelivr.net/npm/@amcharts/amcharts5@5.22.0/xy/+esm";
+  const data = ${rows};
+  const root = am5.Root.new("c");
+  const chart = root.container.children.push(am5xy.XYChart.new(root, {
+    panX: true, panY: false, wheelX: "panX", wheelY: "zoomX", pinchZoomX: true
+  }));
+  const xAxis = chart.xAxes.push(am5xy.DateAxis.new(root, {
+    baseInterval: { timeUnit: "day", count: 1 },
+    renderer: am5xy.AxisRendererX.new(root, { minGridDistance: 50 })
+  }));
+  const yAxis = chart.yAxes.push(am5xy.ValueAxis.new(root, {
+    renderer: am5xy.AxisRendererY.new(root, {})
+  }));
+  const series = chart.series.push(am5xy.SmoothedXLineSeries.new(root, {
+    name: "Spend", xAxis, yAxis, valueYField: "spend", valueXField: "t",
+    stroke: am5.color(0x1644ed), fill: am5.color(0x1644ed)
+  }));
+  series.fills.template.setAll({ fillOpacity: 0.12, visible: true });
+  series.data.setAll(data);
+  chart.set("cursor", am5xy.XYCursor.new(root, { behavior: "zoomX", xAxis }));
+  chart.set("scrollbarX", am5.Scrollbar.new(root, { orientation: "horizontal" }));
+<\/script>`);
 
   useEffect(() => {
     let dead = false;
     const clean: Array<() => void> = [];
-    const mark = (key: string, message: string) => {
-      if (!dead) setErrors((prev) => ({ ...prev, [key]: message }));
-    };
-
-    async function bootTvUp() {
+    async function boot() {
       await Promise.all([
         loadScript("https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"),
         loadScript("https://unpkg.com/uplot@1.6.32/dist/uPlot.iife.min.js"),
@@ -112,139 +168,41 @@ export function ChartLab() {
         });
       }
     }
-
-    async function bootEcharts() {
-      const echarts = await import("echarts");
-      if (dead || !ec.current) return;
-      const chart = echarts.init(ec.current);
-      chart.setOption({
-        grid: { left: 48, right: 16, top: 24, bottom: 48 },
-        tooltip: { trigger: "axis" },
-        xAxis: { type: "category", data: data.map((p) => p.date), boundaryGap: false },
-        yAxis: { type: "value" },
-        dataZoom: [
-          { type: "inside", start: 0, end: 100 },
-          { type: "slider", start: 0, end: 100, height: 18 },
-        ],
-        series: [
-          {
-            type: "line",
-            name: "Spend",
-            data: data.map((p) => p.spend),
-            smooth: true,
-            symbol: "none",
-            areaStyle: { color: "rgba(22,68,237,0.12)" },
-            lineStyle: { color: "#1644ED", width: 2 },
-          },
-        ],
-      });
-      const ro = new ResizeObserver(() => chart.resize());
-      ro.observe(ec.current);
-      clean.push(() => {
-        ro.disconnect();
-        chart.dispose();
-      });
-    }
-
-    async function bootAm() {
-      const am5 = await import("@amcharts/amcharts5");
-      const am5xy = await import("@amcharts/amcharts5/xy");
-      if (dead || !am.current) return;
-      const root = am5.Root.new(am.current);
-      const chart = root.container.children.push(
-        am5xy.XYChart.new(root, {
-          panX: true,
-          panY: false,
-          wheelX: "panX",
-          wheelY: "zoomX",
-          pinchZoomX: true,
-          paddingLeft: 0,
-          layout: root.verticalLayout,
-        })
-      );
-      const xAxis = chart.xAxes.push(
-        am5xy.DateAxis.new(root, {
-          baseInterval: { timeUnit: "day", count: 1 },
-          renderer: am5xy.AxisRendererX.new(root, { minGridDistance: 60 }),
-        })
-      );
-      const yAxis = chart.yAxes.push(
-        am5xy.ValueAxis.new(root, {
-          renderer: am5xy.AxisRendererY.new(root, {}),
-        })
-      );
-      const series = chart.series.push(
-        am5xy.SmoothedXLineSeries.new(root, {
-          name: "Spend",
-          xAxis,
-          yAxis,
-          valueYField: "spend",
-          valueXField: "t",
-          stroke: am5.color(0x1644ed),
-          fill: am5.color(0x1644ed),
-        })
-      );
-      series.fills.template.setAll({ fillOpacity: 0.12, visible: true });
-      series.data.setAll(data);
-      chart.set("cursor", am5xy.XYCursor.new(root, { behavior: "zoomX", xAxis }));
-      chart.set("scrollbarX", am5.Scrollbar.new(root, { orientation: "horizontal" }));
-      clean.push(() => root.dispose());
-    }
-
-    bootTvUp().catch((e) => mark("tv", e?.message || "TV/uPlot failed"));
-    bootEcharts().catch((e) => mark("ec", e?.message || "ECharts failed"));
-    bootAm().catch((e) => mark("am", e?.message || "amCharts failed"));
-
+    boot().catch(() => {});
     return () => {
       dead = true;
       clean.forEach((fn) => fn());
     };
   }, [data]);
 
-  const cards = [
-    {
-      key: "tv",
-      title: "1. TradingView Lightweight Charts",
-      license: "Apache 2.0 · free · ~45KB",
-      note: "Built for time series. Drag the plot or axis to zoom a range. Fast on mobile.",
-      ref: tv,
-    },
-    {
-      key: "up",
-      title: "2. uPlot",
-      license: "MIT · free · ~45KB",
-      note: "Smallest and fastest. Click-drag on the x axis to zoom A→B. Reset with double-click.",
-      ref: up,
-    },
-    {
-      key: "ec",
-      title: "3. Apache ECharts",
-      license: "Apache 2.0 · free · heavier (~300KB)",
-      note: "Drag on the chart or the slider to pick a window. Best if we need many chart types later.",
-      ref: ec,
-    },
-    {
-      key: "am",
-      title: "4. amCharts 5",
-      license: "Free with logo · paid to remove watermark",
-      note: "Click-drag to zoom X. Scrollbar under the plot. Strong UX; not fully free for production without a license.",
-      ref: am,
-    },
-  ];
-
   return (
     <div className="mt-8 grid gap-6">
-      {cards.map((card) => (
-        <section key={card.title} className="rounded-2xl border bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-semibold">{card.title}</h2>
-          <p className="text-xs font-medium text-blue-700">{card.license}</p>
-          <p className="mt-1 text-sm text-neutral-600">{card.note}</p>
-          {errors[card.key] ? <p className="mt-2 text-sm text-red-600">{errors[card.key]}</p> : null}
-          <div ref={card.ref} className="mt-3 h-[280px] w-full min-w-[280px]" />
-        </section>
-      ))}
+      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-semibold">1. TradingView Lightweight Charts</h2>
+        <p className="text-xs font-medium text-blue-700">Apache 2.0 · free · ~45KB</p>
+        <p className="mt-1 text-sm text-neutral-600">Drag the plot or axis to zoom a range.</p>
+        <div ref={tv} className="mt-3 h-[280px] w-full" />
+      </section>
+      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-semibold">2. uPlot</h2>
+        <p className="text-xs font-medium text-blue-700">MIT · free · ~45KB</p>
+        <p className="mt-1 text-sm text-neutral-600">Click-drag on X to zoom A→B. Double-click reset.</p>
+        <div ref={up} className="mt-3 h-[280px] w-full" />
+      </section>
+      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-semibold">3. Apache ECharts</h2>
+        <p className="text-xs font-medium text-blue-700">Apache 2.0 · free · heavier</p>
+        <p className="mt-1 text-sm text-neutral-600">Drag the line or the slider to pick a window.</p>
+        <iframe title="ECharts preview" className="mt-3 h-[300px] w-full rounded-lg border-0 bg-white" srcDoc={echartsSrc} />
+      </section>
+      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-semibold">4. amCharts 5</h2>
+        <p className="text-xs font-medium text-blue-700">Free with logo · paid to remove watermark</p>
+        <p className="mt-1 text-sm text-neutral-600">Click-drag to zoom X. Scrollbar under the plot.</p>
+        <iframe title="amCharts preview" className="mt-3 h-[300px] w-full rounded-lg border-0 bg-white" srcDoc={amSrc} />
+      </section>
       <p className="text-xs text-neutral-500">
-        Recommendation if we want drag-range + light files: Lightweight Charts or uPlot. ECharts if we need more chart types. amCharts only if we accept the logo or buy a license.
+        Lightweight Charts or uPlot if we want small files. ECharts if we need more chart types. amCharts only if we accept the logo or buy a license.
       </p>
     </div>
   );
