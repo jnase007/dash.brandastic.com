@@ -7,7 +7,7 @@ export type TeamMember = {
 /** Real brandastic.co Team Hub avatars (spinning login faces) */
 export const TEAM: TeamMember[] = [
   {
-    name: "Justin Nassie",
+    name: "Justin Nase",
     role: "Founder / President",
     image: "/team/co-justin.jpg",
   },
@@ -28,11 +28,11 @@ export const TEAM: TeamMember[] = [
   },
   {
     name: "Erin Clancy",
-    role: "Team",
+    role: "Account / Ops",
     image: "/team/co-erin.jpg",
   },
   {
-    name: "Jordan Nassie",
+    name: "Jordan Nase",
     role: "Team",
     image: "/team/co-jordan.jpg",
   },
@@ -70,17 +70,87 @@ export const CLIENT_BRAND: Record<
   "adopt-a-highway": {
     accent: "#16a34a",
     accentSoft: "rgba(22, 163, 74, 0.12)",
-    monogram: "AH",
+    monogram: "AAH",
   },
   "atomic-horseradish": {
     accent: "#ea580c",
     accentSoft: "rgba(234, 88, 12, 0.12)",
-    monogram: "AH",
+    monogram: "AHR",
   },
   "ch-pm": {
     accent: "#4f46e5",
     accentSoft: "rgba(79, 70, 229, 0.12)",
     monogram: "CH",
+  },
+  "heart-christian-academy": {
+    accent: "#7c3aed",
+    accentSoft: "rgba(0, 0, 0, 0.08)",
+    monogram: "HCA",
+  },
+  "rogers-beltran": {
+    accent: "#0f172a",
+    accentSoft: "rgba(0, 0, 0, 0.08)",
+    monogram: "RB",
+  },
+  "calops": {
+    accent: "#0284c7",
+    accentSoft: "rgba(0, 0, 0, 0.08)",
+    monogram: "CO",
+  },
+  "ryvid": {
+    accent: "#111827",
+    accentSoft: "rgba(0, 0, 0, 0.08)",
+    monogram: "RY",
+  },
+  "topgreener": {
+    accent: "#15803d",
+    accentSoft: "rgba(0, 0, 0, 0.08)",
+    monogram: "TG",
+  },
+  "wearparts": {
+    accent: "#b45309",
+    accentSoft: "rgba(0, 0, 0, 0.08)",
+    monogram: "WP",
+  },
+  "ocie-sbdc": {
+    accent: "#1d4ed8",
+    accentSoft: "rgba(0, 0, 0, 0.08)",
+    monogram: "OC",
+  },
+  "salvin-dental": {
+    accent: "#0e7490",
+    accentSoft: "rgba(0, 0, 0, 0.08)",
+    monogram: "SD",
+  },
+  "labtech": {
+    accent: "#475569",
+    accentSoft: "rgba(0, 0, 0, 0.08)",
+    monogram: "LT",
+  },
+  "lee-partners-law": {
+    accent: "#1e3a8a",
+    accentSoft: "rgba(0, 0, 0, 0.08)",
+    monogram: "LP",
+  },
+  "oc-construction": {
+    accent: "#c2410c",
+    accentSoft: "rgba(0, 0, 0, 0.08)",
+    monogram: "OCC",
+  },
+  "gigx": {
+    accent: "#db2777",
+    accentSoft: "rgba(0, 0, 0, 0.08)",
+    monogram: "GX",
+  },
+  "young-surgical": {
+    accent: "#0f766e",
+    accentSoft: "rgba(0, 0, 0, 0.08)",
+    monogram: "YS",
+  },
+  "mono-b": {
+    accent: "#18181b",
+    accentSoft: "rgba(0, 0, 0, 0.08)",
+    monogram: "MB",
   },
 };
 
